@@ -1,0 +1,11 @@
+env/
+firmware/build/
+firmware/managed_components/
+upstream/
+**/凭证/
+*.pem
+*.key
+*.bin
+*.elf
+*.map
+.git/

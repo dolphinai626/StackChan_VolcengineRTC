@@ -1,0 +1,33 @@
+# ESP-IDF
+firmware/build/
+firmware/managed_components/
+firmware/dependencies.lock
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/sdkconfig.local
+firmware/sdkconfig.local.*
+
+# Pulled upstream (managed by fetch_repos.sh)
+upstream/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Build artifacts
+*.bin
+*.elf
+*.map
+*.o
+*.a
+
+# Secrets — NEVER commit
+**/凭证/
+**/credential*/
+**/secret*/
+*.pem
+*.key
+key.md
+keys.md

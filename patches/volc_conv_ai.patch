@@ -1,0 +1,150 @@
+diff --git a/volc_conv_ai/src/base/volc_device_manager.c b/volc_conv_ai/src/base/volc_device_manager.c
+index d2aaaaf..77ec916 100644
+--- a/volc_conv_ai/src/base/volc_device_manager.c
++++ b/volc_conv_ai/src/base/volc_device_manager.c
+@@ -26,15 +26,34 @@
+ #define VOLC_API_VERSION_QUERY_PARAM "Version=2021-12-14"
+ #define VOLC_API_ACTION_DYNAMIC_REGISTER  "Action=DynamicRegister"
+ 
++// nano newlib printf 不支持 %llu，自行实现 uint64 -> 十进制字符串
++static void volc_u64_to_str(uint64_t v, char* buf, size_t buflen) {
++    char tmp[24];
++    int i = 0;
++    if (v == 0) {
++        if (buflen >= 2) { buf[0] = '0'; buf[1] = '\0'; }
++        return;
++    }
++    while (v > 0 && i < (int)sizeof(tmp)) {
++        tmp[i++] = '0' + (int)(v % 10);
++        v /= 10;
++    }
++    int n = i < (int)buflen - 1 ? i : (int)buflen - 1;
++    for (int k = 0; k < n; k++) buf[k] = tmp[i - 1 - k];
++    buf[n] = '\0';
++}
++
+ char* volc_generate_signature(const char* secret_key, const char* product_key, const char* device_name, int rnd, uint64_t timestamp, int auth_type)
+ {
+     char input_str[256] = {0};
++    char ts_str[24] = {0};
+     uint8_t hmac_result[32] = {0};
+     int hmac_result_len = sizeof(hmac_result);
+     int base64_encoded_len = 0;
+     size_t olen = 0;
+ 
+-    snprintf(input_str, sizeof(input_str), "auth_type=%d&device_name=%s&random_num=%d&product_key=%s&timestamp=%" PRIu64, auth_type, device_name, rnd, product_key, timestamp);
++    volc_u64_to_str(timestamp, ts_str, sizeof(ts_str));
++    snprintf(input_str, sizeof(input_str), "auth_type=%d&device_name=%s&random_num=%d&product_key=%s&timestamp=%s", auth_type, device_name, rnd, product_key, ts_str);
+     volc_sha256_hmac((const unsigned char*)secret_key, strlen(secret_key), (const unsigned char*)input_str, strlen(input_str), hmac_result, &hmac_result_len);
+     base64_encoded_len = volc_base64_encoded_length(hmac_result_len);
+     unsigned char* base64_encoded = (unsigned char*)volc_osal_malloc(base64_encoded_len);
+@@ -49,12 +68,14 @@ char* volc_generate_signature(const char* secret_key, const char* product_key, c
+ 
+ char* volc_generate_signature_ws(const char* secret_key, const char* product_key, const char* device_name, const char* instance_id, int rnd, uint64_t timestamp, int auth_type) {
+     char input_str[256] = {0};
++    char ts_str[24] = {0};
+     uint8_t hmac_result[32] = {0};
+     int hmac_result_len = sizeof(hmac_result);
+     int base64_encoded_len = 0;
+     size_t olen = 0;
+ 
+-    snprintf(input_str, sizeof(input_str), "auth_type=%d&device_name=%s&random_num=%d&product_key=%s&timestamp=%" PRIu64 "&instance_id=%s", auth_type, device_name, rnd, product_key, timestamp, instance_id);
++    volc_u64_to_str(timestamp, ts_str, sizeof(ts_str));
++    snprintf(input_str, sizeof(input_str), "auth_type=%d&device_name=%s&random_num=%d&product_key=%s&timestamp=%s&instance_id=%s", auth_type, device_name, rnd, product_key, ts_str, instance_id);
+     volc_sha256_hmac((const unsigned char*)secret_key, strlen(secret_key), (const unsigned char*)input_str, strlen(input_str), hmac_result, &hmac_result_len);
+     base64_encoded_len = volc_base64_encoded_length(hmac_result_len);
+     unsigned char* base64_encoded = (unsigned char*)volc_osal_malloc(base64_encoded_len);
+@@ -82,7 +103,7 @@ int volc_device_register(volc_iot_info_t* info, char** output)
+ {
+     int ret = 0;
+     uint64_t current_time = volc_osal_get_time_ms();
+-    int32_t random_num = (int32_t)current_time;
++    int32_t random_num = (int32_t)(current_time & 0x7FFFFFFFULL);
+     char url[256] = {0};
+     char* payload = NULL;
+     char* signature = volc_generate_signature(info->product_secret, info->product_key, info->device_name, random_num, current_time, 1);
+@@ -152,7 +173,7 @@ err_out_label:
+ int volc_get_rtc_config(volc_iot_info_t* info, int audio_codec, const char* bot_id, const char* task_id, volc_room_info_t* room_info, const char* params) {
+     int ret = 0;
+     uint64_t current_time = volc_osal_get_time_ms();
+-    int32_t random_num = (int32_t)current_time;
++    int32_t random_num = (int32_t)(current_time & 0x7FFFFFFFULL);
+     char url[256] = {0};
+     char* signature = volc_generate_signature(info->device_secret, info->product_key, info->device_name, random_num, current_time, 0);
+     cJSON* response_json = NULL;
+diff --git a/volc_conv_ai/src/util/volc_log.h b/volc_conv_ai/src/util/volc_log.h
+index fab4fe8..0450f1b 100644
+--- a/volc_conv_ai/src/util/volc_log.h
++++ b/volc_conv_ai/src/util/volc_log.h
+@@ -21,7 +21,7 @@ extern "C"
+         VOLC_LOG_LEVEL_NONE, // 不输出日志
+     } volc_log_level_e;
+ 
+-#define VOLC_LOG_LEVEL_DEFAULT VOLC_LOG_LEVEL_INFO
++#define VOLC_LOG_LEVEL_DEFAULT VOLC_LOG_LEVEL_WARN
+ 
+ // 日志级别颜色定义
+ #define LOG_COLOR_RESET "\033[0m"
+diff --git a/volc_conv_ai/src/volc_conv_ai.c b/volc_conv_ai/src/volc_conv_ai.c
+index 651e01a..0583c28 100644
+--- a/volc_conv_ai/src/volc_conv_ai.c
++++ b/volc_conv_ai/src/volc_conv_ai.c
+@@ -290,27 +290,23 @@ void volc_destroy(volc_engine_t handle) {
+     if (NULL == engine) {
+         return;
+     }
+-    // if (engine->status == VOLC_RT_STATE_STARTED) {
+-    //     volc_stop(handle);
+-    // }
+-    switch(engine->mode) {
+-        case VOLC_MODE_WS:
++    // Destroy whichever transports were created, regardless of engine->mode.
++    // mode is only assigned in volc_start, so switching on it leaked the whole
++    // RTC engine (live tasks referencing the freed engine struct) whenever the
++    // engine was destroyed without ever being started; the next volc_create
++    // then crashed inside the RTC lite library.
+ #if defined(ENABLE_WS_MODE)
+-            volc_ws_destroy(engine->ws);
+-#else
+-            LOGW("WS mode is not enabled");
++    if (engine->ws) {
++        volc_ws_destroy(engine->ws);
++        engine->ws = NULL;
++    }
+ #endif
+-            break;
+-        case VOLC_MODE_RTC:
+ #if defined(ENABLE_RTC_MODE)
+-            volc_rtc_destroy(engine->rtc);
+-#else
+-            LOGW("RTC mode is not enabled");
+-#endif
+-            break;
+-        default:
+-            break;
++    if (engine->rtc) {
++        volc_rtc_destroy(engine->rtc);
++        engine->rtc = NULL;
+     }
++#endif
+     _iot_info_free(&engine->info);
+     HAL_SAFE_FREE(engine);
+ }
+@@ -350,9 +346,16 @@ int volc_start(volc_engine_t handle, volc_opt_t* opt) {
+ #endif
+     }
+ 
++    if (ret != 0) {
++        // Keep CREATED/STOPPED on failure so the caller can retry volc_start;
++        // marking STARTED here used to wedge the engine after e.g. a
++        // GetRTCConfig HTTP failure ("engine is not in CREATED state").
++        LOGE("engine start failed: %d", ret);
++        return ret;
++    }
+     engine->status = VOLC_RT_STATE_STARTED;
+     LOGI("engine started successfully");
+-    return ret;
++    return 0;
+ }
+ 
+ int volc_stop(volc_engine_t handle) {

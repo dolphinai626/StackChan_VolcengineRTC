@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "description": "Upstream dependencies fetched by scripts/fetch_repos.sh into ./upstream/. Not vendored into git. xiaozhi-board-hal / xiaozhi-app are dolphinai626 forks of 78/xiaozhi-esp32 maintained on hal-only / app-only branches.",
+  "repos": [
+    {
+      "name": "xiaozhi-board-hal",
+      "url":  "https://github.com/dolphinai626/xiaozhi-board-hal.git",
+      "ref":  "hal-only",
+      "dest": "upstream/xiaozhi-board-hal",
+      "role": "Board-level HAL component (codecs/display/camera/buttons). Mirror of 78/xiaozhi-esp32; we maintain a hal-only branch with business logic stripped."
+    },
+    {
+      "name": "xiaozhi-app",
+      "url":  "https://github.com/dolphinai626/xiaozhi-app.git",
+      "ref":  "app-only",
+      "dest": "upstream/xiaozhi-app",
+      "role": "Xiaozhi business component (Application/protocols/mcp_server/wake_word). Forked from 78/xiaozhi-esp32; we maintain an app-only branch with board HAL stripped."
+    },
+    {
+      "name": "volc_conv_ai",
+      "url":  "https://github.com/volcengine/ConversationalAI-Embedded-Kit-2.0.git",
+      "ref":  "main",
+      "dest": "upstream/volc_conv_ai",
+      "role": "Volcengine ConversationalAI Embedded Kit 2.0 (aios + conv_service + function_call_service). Pulled from Volcengine official; not forked."
+    },
+    {
+      "name": "stackchan",
+      "url":  "https://github.com/m5stack/StackChan.git",
+      "ref":  "main",
+      "dest": "upstream/stackchan",
+      "role": "Original StackChan repo (reference only; we do not vendor or modify it)."
+    }
+  ]
+}
