@@ -1,0 +1,527 @@
+debug-wakeup-source-localization.md
+  eee3a75946686357 1-48 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[1,48]}]}]}
+firmware/main/hal/board/cores3_audio_codec.cc
+  eee3a75946686357 14-204 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[14,204]}]}]}
+firmware/main/apps/app_ai_agent/volc_agent.cpp
+  eee3a75946686357 34-78,84-1313,1503-1504,1511-1512,1516,1534,1668-1715 gitai:{"mixed_line_ranges":[{"Single":560}],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[34,78]},{"Range":[84,1313]},{"Range":[1503,1504]},{"Range":[1511,1512]},{"Single":1516},{"Single":1534},{"Range":[1668,1715]}]}]}
+  049cde31a577dd43 79-83,1487-1498,1505-1510,1514-1515,1517-1533,1535-1540 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a29044d2a5b17c8e3c64c06","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[79,83]},{"Range":[1487,1498]},{"Range":[1505,1510]},{"Range":[1514,1515]},{"Range":[1517,1533]},{"Range":[1535,1540]}]}]}
+firmware/main/stackchan/avatar/skins/default/speech_bubble.cpp
+  eee3a75946686357 12-60 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[12,60]}]}]}
+firmware/main/CMakeLists.txt
+  eee3a75946686357 328 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Single":328}]}]}
+firmware/main/hal/board/stackchan_camera.cc
+  eee3a75946686357 372-375 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[372,375]}]}]}
+docs/DESIGN.md
+  eee3a75946686357 11-256 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[11,256]}]}]}
+firmware/main/hal/board/config.h
+  eee3a75946686357 8 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Single":8}]}]}
+firmware/main/apps/app_avatar/view/ws_call.cpp
+  eee3a75946686357 48-150 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[48,150]}]}]}
+debug-volc-wake-reboot.md
+  eee3a75946686357 1-113 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[1,113]}]}]}
+firmware/main/hal/board/stackchan.cc
+  eee3a75946686357 208 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a27bd302a5b17c8e3c646dc","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Single":208}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "65ff54e90fa86cb2a20255a3f942e20858c30851",
+  "prompts": {
+    "049cde31a577dd43": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a27c5da2a5b17c8e3c647d6",
+        "model": "openrouter-3o__dev"
+      },
+      "human_author": "dolphinai626 <dolphinai626@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 64,
+      "total_deletions": 27,
+      "accepted_lines": 51,
+      "overriden_lines": 4
+    },
+    "eee3a75946686357": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a1d03651ab287ef41163728",
+        "model": "openrouter-3o__dev"
+      },
+      "human_author": "dolphinai626 <dolphinai626@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 939,
+      "total_deletions": 540,
+      "accepted_lines": 715,
+      "overriden_lines": 5
+    }
+  },
+  "attestation_metadata": {
+    "debug-volc-wake-reboot.md": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              113
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  113
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "debug-wakeup-source-localization.md": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              1,
+              48
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  1,
+                  48
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "docs/DESIGN.md": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              11,
+              256
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  11,
+                  256
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/CMakeLists.txt": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Single": 328
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Single": 328
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/apps/app_ai_agent/volc_agent.cpp": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              34,
+              78
+            ]
+          },
+          {
+            "Range": [
+              84,
+              1313
+            ]
+          },
+          {
+            "Range": [
+              1503,
+              1504
+            ]
+          },
+          {
+            "Range": [
+              1511,
+              1512
+            ]
+          },
+          {
+            "Single": 1516
+          },
+          {
+            "Single": 1534
+          },
+          {
+            "Range": [
+              1668,
+              1715
+            ]
+          }
+        ],
+        "mixed_line_ranges": [
+          {
+            "Single": 560
+          }
+        ],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  34,
+                  78
+                ]
+              },
+              {
+                "Range": [
+                  84,
+                  1313
+                ]
+              },
+              {
+                "Range": [
+                  1503,
+                  1504
+                ]
+              },
+              {
+                "Range": [
+                  1511,
+                  1512
+                ]
+              },
+              {
+                "Single": 1516
+              },
+              {
+                "Single": 1534
+              },
+              {
+                "Range": [
+                  1668,
+                  1715
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "049cde31a577dd43",
+        "line_ranges": [
+          {
+            "Range": [
+              79,
+              83
+            ]
+          },
+          {
+            "Range": [
+              1487,
+              1498
+            ]
+          },
+          {
+            "Range": [
+              1505,
+              1510
+            ]
+          },
+          {
+            "Range": [
+              1514,
+              1515
+            ]
+          },
+          {
+            "Range": [
+              1517,
+              1533
+            ]
+          },
+          {
+            "Range": [
+              1535,
+              1540
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a29044d2a5b17c8e3c64c06",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  79,
+                  83
+                ]
+              },
+              {
+                "Range": [
+                  1487,
+                  1498
+                ]
+              },
+              {
+                "Range": [
+                  1505,
+                  1510
+                ]
+              },
+              {
+                "Range": [
+                  1514,
+                  1515
+                ]
+              },
+              {
+                "Range": [
+                  1517,
+                  1533
+                ]
+              },
+              {
+                "Range": [
+                  1535,
+                  1540
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/apps/app_avatar/view/ws_call.cpp": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              48,
+              150
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  48,
+                  150
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/hal/board/config.h": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Single": 8
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Single": 8
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/hal/board/cores3_audio_codec.cc": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              14,
+              204
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  14,
+                  204
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/hal/board/stackchan.cc": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Single": 208
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Single": 208
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/hal/board/stackchan_camera.cc": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              372,
+              375
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  372,
+                  375
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/stackchan/avatar/skins/default/speech_bubble.cpp": [
+      {
+        "hash": "eee3a75946686357",
+        "line_ranges": [
+          {
+            "Range": [
+              12,
+              60
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a27bd302a5b17c8e3c646dc",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  12,
+                  60
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "049cde31a577dd43": {
+      "tool": "trae",
+      "conversation_id": "6a27c5da2a5b17c8e3c647d6",
+      "session_id": "6a27c5da2a5b17c8e3c647d6",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "eee3a75946686357": {
+      "tool": "trae",
+      "conversation_id": "6a1d03651ab287ef41163728",
+      "session_id": "6a1d03651ab287ef41163728",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}
