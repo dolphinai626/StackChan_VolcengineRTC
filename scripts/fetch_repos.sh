@@ -39,6 +39,21 @@ for i in $(seq 0 $((count-1))); do
         echo "[clone]  $name <- $url ($ref)"
         git clone --depth=1 --branch "$ref" "$url" "$target"
     fi
+
+    # 应用本仓库维护的补丁（patches/<name>.patch）。reset --hard 会清掉上次的
+    # 应用结果，所以每次 fetch 后都要重打。
+    patch_file="$ROOT/patches/$name.patch"
+    if [[ -f "$patch_file" ]]; then
+        if git -C "$target" apply --check "$patch_file" 2>/dev/null; then
+            git -C "$target" apply "$patch_file"
+            echo "[patch]  $name <- patches/$name.patch"
+        elif git -C "$target" apply --check --reverse "$patch_file" 2>/dev/null; then
+            echo "[patch]  $name already patched, skip"
+        else
+            echo "error: patches/$name.patch no longer applies to $name @ $ref" >&2
+            exit 1
+        fi
+    fi
 done
 
 # 拉完后跑一次 secret 扫描

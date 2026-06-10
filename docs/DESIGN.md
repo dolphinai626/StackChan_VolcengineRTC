@@ -8,7 +8,7 @@
 - `AppAiAgent`：基于 78/xiaozhi-esp32（自托管派）
 - `AppVolcengineAi`：基于 VolcEngine ConversationalAI Embedded Kit 2.0（云服务派 + 视觉理解）
 
-两个 App 共享板级 HAL、Avatar/LED/Servo 表现层、6 个 Function Call 工具。
+两个 App 共享板级 HAL、Avatar/LED/Servo 表现层、9 个 Function Call 工具。
 **任意时刻仅一个 AI App 持有音频/摄像头资源**。
 
 ---
@@ -111,20 +111,23 @@ namespace ai_backend {
 
 ### 5.1 端侧
 
-`main/stackchan/robot_tools/`：
-- `robot_tools.{h,cpp}` 后端无关
-- `adapter_xiaozhi.cpp` 注册到 mcp_server
-- `adapter_volcengine.cpp` 注册到 function_call_service dispatch
+Volc 链路工具调用集中在 `main/apps/app_ai_agent/volc_agent.cpp`：
+- 服务端通过 `tool` magic 下发 `tool_calls` 数组，`handleToolMessage` 解析
+- `dispatchTool(tool_name, args_json)` 按 `tool_name` 分发到端侧能力，返回 JSON 字符串
+- `sendToolResult` 用 `func` magic 回传 `{ToolCallID, Content}`
 
-6 个工具：
-| Tool                         | 描述                       |
-| ---------------------------- | -------------------------- |
-| `self.robot.get_head_angles` | 读舵机当前 yaw/pitch       |
-| `self.robot.set_head_angles` | 设置舵机角度（带速度）     |
-| `self.robot.set_led_color`   | 设置左右 NeonLight 颜色    |
-| `self.robot.create_reminder` | 创建提醒                   |
-| `self.robot.stop_reminder`   | 取消提醒                   |
-| `self.robot.capture_vision`  | 单帧 JPEG 上传             |
+9 个工具：
+| Tool                         | 描述                                | 返回                                       |
+| ---------------------------- | ----------------------------------- | ------------------------------------------ |
+| `self.robot.get_head_angles` | 读舵机当前 yaw/pitch                | `{yaw,pitch}`                              |
+| `self.robot.set_head_angles` | 设置舵机角度（带速度）              | `{ok}`                                     |
+| `self.robot.shake_head`      | 左右摇头（表达否定/调皮）           | `{ok}`                                     |
+| `self.robot.set_led_color`   | 设置左右 NeonLight 颜色             | `{ok}`                                     |
+| `self.robot.create_reminder` | 创建提醒                            | `{id}`                                     |
+| `self.robot.get_reminders`   | 获取未完成提醒列表                  | `[{id,duration_ms,message,repeat}]`        |
+| `self.robot.stop_reminder`   | 取消提醒                            | `{ok}`                                     |
+| `self.robot.get_volume`      | 读取扬声器音量(0~100)               | `{volume}`                                 |
+| `self.robot.set_volume`      | 设置扬声器音量(0~100)               | `{ok,volume}`                              |
 
 ### 5.3 服务端 Schema（火山方舟 / Xiaozhi 后端通用）
 
@@ -149,7 +152,25 @@ namespace ai_backend {
       "pitch": { "type": "integer", "minimum": 0,    "maximum": 90  },
       "speed": { "type": "integer", "minimum": 100,  "maximum": 1000, "default": 150 }
     },
-    "required": ["yaw", "pitch"]
+    "required": []
+  }
+}
+```
+
+#### `self.robot.shake_head`
+```json
+{
+  "name": "self.robot.shake_head",
+  "description": "Shake head left-right to express denial or playfulness.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "times":     { "type": "integer", "minimum": 1,   "maximum": 5,    "default": 2 },
+      "amplitude": { "type": "integer", "minimum": 5,   "maximum": 60,   "default": 25 },
+      "speed":     { "type": "integer", "minimum": 100, "maximum": 1000, "default": 250 },
+      "pause_ms":  { "type": "integer", "minimum": 50,  "maximum": 500,  "default": 180 }
+    },
+    "required": []
   }
 }
 ```
@@ -183,8 +204,17 @@ namespace ai_backend {
       "message":          { "type": "string",  "maxLength": 128 },
       "repeat":           { "type": "boolean", "default": false }
     },
-    "required": ["duration_seconds", "message"]
+    "required": ["duration_seconds"]
   }
+}
+```
+
+#### `self.robot.get_reminders`
+```json
+{
+  "name": "self.robot.get_reminders",
+  "description": "List all active (not-yet-fired) reminders.",
+  "parameters": { "type": "object", "properties": {}, "required": [] }
 }
 ```
 
@@ -201,16 +231,26 @@ namespace ai_backend {
 }
 ```
 
-#### `self.robot.capture_vision`
+#### `self.robot.get_volume`
 ```json
 {
-  "name": "self.robot.capture_vision",
-  "description": "Capture a single JPEG frame for cloud vision understanding.",
+  "name": "self.robot.get_volume",
+  "description": "Get current speaker volume (0-100).",
+  "parameters": { "type": "object", "properties": {}, "required": [] }
+}
+```
+
+#### `self.robot.set_volume`
+```json
+{
+  "name": "self.robot.set_volume",
+  "description": "Set speaker volume. Call when user asks to turn volume up/down or mute. 0=mute.",
   "parameters": {
     "type": "object",
     "properties": {
-      "quality": { "type": "integer", "minimum": 10, "maximum": 80, "default": 20 }
-    }
+      "volume": { "type": "integer", "minimum": 0, "maximum": 100, "default": 70 }
+    },
+    "required": ["volume"]
   }
 }
 ```
@@ -220,9 +260,10 @@ namespace ai_backend {
 ```
 You are an embodied robot named StackChan. You can:
 - Move your head with set_head_angles (read current pose first via get_head_angles).
+- Shake your head with shake_head to express denial or playfulness.
 - Express emotion through set_led_color: green=happy, red=alert, blue=thinking, off=idle.
-- Set reminders with create_reminder; cancel them with stop_reminder.
-- Look at the user's environment with capture_vision when they ask about what you can see.
+- Set reminders with create_reminder; list them with get_reminders; cancel them with stop_reminder.
+- Adjust speaker volume with set_volume (read current via get_volume) when the user asks louder/quieter.
 Respond naturally and use tools sparingly to enhance interaction, not replace conversation.
 ```
 
@@ -320,7 +361,7 @@ stackchan-volc-open/
 - **M0 骨架**（当前）：目录、CMake、AiBackendArbiter、AiAgentBridge、RobotTools 双 adapter、HAL stub、App 空壳
 - **M1 上游接入**：fetch_repos.sh 跑通；xiaozhi-board-hal / xiaozhi-app / volc_conv_ai 真实编译
 - **M2 双 App 互斥跑通**：launcher 互斥高亮；两后端能各自跑完整对话
-- **M3 视觉与编排**：被动取帧；火山方舟智能体 6 工具配置；Xiaozhi MCP 端侧注册
+- **M3 视觉与编排**：被动取帧；火山方舟智能体 9 工具配置；Xiaozhi MCP 端侧注册
 - **M4 OTA + 配网**：esp_https_ota；app_setup workers 双后端凭据 SoftAP 配网
 - **M5 polish**：README 双 App 故事；PORTING 终稿；CI
 

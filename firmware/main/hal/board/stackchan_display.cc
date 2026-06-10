@@ -398,6 +398,8 @@ void StackChanAvatarDisplay::SetChatMessage(const char* role, const char* conten
         stackchan.avatar().setSpeech(content);
     } else if (strcmp(role, "assistant") == 0) {
         stackchan.avatar().setSpeech(content);
+    } else if (strcmp(role, "user") == 0) {
+        stackchan.avatar().setSpeech(content);
     }
 }
 

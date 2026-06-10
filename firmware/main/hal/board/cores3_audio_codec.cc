@@ -14,7 +14,9 @@ CoreS3AudioCodec::CoreS3AudioCodec(void* i2c_master_handle, int input_sample_rat
     input_channels_ = 2; // 输入通道数
     input_sample_rate_ = input_sample_rate;
     output_sample_rate_ = output_sample_rate;
-    input_gain_ = 60;
+    // ES7210 PGA 物理上限 37.5dB，传 60 会被驱动钳到最大档 37.5dB，近场说话易硬削波
+    // 劣化 ASR。对齐官方同款 CoreS3 板的 30dB（30dB 档），留出余量避免削波。
+    input_gain_ = 30;
 
     CreateDuplexChannels(mclk, bclk, ws, dout, din);
 

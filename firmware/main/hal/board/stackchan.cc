@@ -205,7 +205,9 @@ public:
 
     bool UpdateTouchPoint()
     {
-        auto err = TryReadRegs(0x02, read_buffer_, 6);
+        // 触摸读超时与 20ms 轮询周期对齐：会话期 I2C 总线竞争偶发读超时，默认
+        // 100ms 超时会阻塞整个触摸轮询 100ms，期间不采样会丢掉落在该窗口内的短点击。
+        auto err = TryReadRegs(0x02, read_buffer_, 6, 20);
         if (err != ESP_OK) {
             tp_.num = 0;
             tp_.x   = -1;

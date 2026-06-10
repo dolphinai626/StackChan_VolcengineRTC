@@ -72,11 +72,18 @@ static std::mutex _playback_mutex;
 static std::deque<std::vector<uint8_t>> _playback_queue;
 static std::atomic_bool _playback_task_running{false};
 static std::atomic_bool _playback_task_started{false};
+// 事件驱动唤醒：入队/停止时通知 playbackTask，避免队列空时固定 10ms 盲等导致
+// 新包到达后晚取走、叠加网络抖动触发 DMA 欠载卡顿。
+static TaskHandle_t _playback_task_handle = nullptr;
 // 抖动预缓冲：服务端下行默认按 ~120ms 分包到达，且到达节奏不均。播放前先攒够
 // _playback_prime_frames 个下行包再开始 drain，配合 I2S 60ms DMA 缓冲吸收抖动，
 // 避免一来就播导致 DMA 欠载产生卡顿。仅在会话开始/flush 时预缓冲一次。
 static std::atomic_bool _playback_priming{true};
-constexpr size_t _playback_queue_max_frames = 32;
+// 服务端一轮回复会突发地把 TTS 音频快于实时推下来（~120ms/包），32 包(~3.8s)上限
+// 太小：长回复时队列被填满后丢最旧包(丢音/"有时没声")并稳定积压满缓冲(延迟数秒/
+// "比字幕慢")。TTS 必须顺序完整播放，不能丢包；存的是压缩 Opus 包(几百字节)，放
+// PSRAM 充裕，上限放大到可容纳整轮回复即可吸收突发。
+constexpr size_t _playback_queue_max_frames = 256;
 constexpr size_t _playback_prime_frames = 2;
 
 // Async uplink queue: afeFetchTask only fetches + enqueues raw 16kHz PCM frames
@@ -89,6 +96,16 @@ static std::deque<std::vector<int16_t>> _uplink_queue;
 static std::atomic_bool _uplink_task_running{false};
 static std::atomic_bool _uplink_task_started{false};
 constexpr size_t _uplink_queue_max_frames = 50;  // ~1s of 20ms frames
+
+// Async tool-call queue: tool_calls 在 SDK 收包线程(VolcRTCMain)回调中到达，但端侧
+// 工具可能长时间阻塞（如 shake_head 内的 vTaskDelay 数秒），在回调里同步执行会卡住
+// 下行音频/消息收包造成播放断流甚至超时掉线。回调只把 payload 入队，独立任务解析
+// 执行并回传结果。
+static std::mutex _tool_mutex;
+static std::deque<std::string> _tool_queue;
+static std::atomic_bool _tool_task_running{false};
+static std::atomic_bool _tool_task_started{false};
+constexpr size_t _tool_queue_max = 8;
 
 // AFE (Audio Front End) for local WakeNet. Replaces the previous half-duplex
 // guard (`_assistant_speaking`) and software silence window. Pipeline:
@@ -131,6 +148,13 @@ static std::atomic<int64_t> _external_prompt_last_attempt_us{0};
 constexpr int64_t _conv_idle_timeout_ms = 15000;  // 对话静默 15s 回等待唤醒
 constexpr uint32_t _uplink_active_rms = 600;      // 上行帧 RMS 超过此值视为用户在讲话
 
+// 半双工门控：CoreS3 无硬件回采参考通道，AFE 未开 AEC，模型思考/回复(TTS 播放)期间
+// 麦克风会采到扬声器自身声音并上行，导致服务端把回声当成用户讲话（自问自答 + 识别污染）。
+// 门控以会话状态为准：仅 THINKING/ANSWERING 期间丢弃上行帧；LISTENING（用户说话）期间
+// 必须持续采集，绝不丢帧。打断走屏幕点击，不依赖语音 barge-in，故门控不影响交互。
+// 0 表示未进入对话；其余取值对应 volc_conv_status_e。
+static std::atomic<int> _conv_status{0};
+
 // 会话 UI 状态切换（定义在文件后部），afeFetchTask 唤醒/超时时需要调用。
 void uiWaitingForWake();
 void uiListening();
@@ -139,6 +163,8 @@ void sendExternalDatePromptIfNeeded();
 void startPlaybackTask();
 void startUplinkTask();
 void stopUplinkTask();
+void startToolTask();
+void stopToolTask();
 
 // 会话建联/断联（定义在文件后部）。唤醒后才 volc_start 建联，空闲超时后 volc_stop
 // 断联回待机，避免一进入链路服务端就主动推欢迎语开始对话。
@@ -212,8 +238,12 @@ bool waitForSystemTime()
     }
 
     if (!esp_sntp_enabled()) {
+        // 与 Hal::startSntp 同一组服务器（需 CONFIG_LWIP_SNTP_MAX_SERVERS>=3）：
+        // pool.ntp.org 在部分网络环境不可达，多服务器避免这里白等 10s。
         esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
         esp_sntp_setservername(0, "pool.ntp.org");
+        esp_sntp_setservername(1, "time.google.com");
+        esp_sntp_setservername(2, "cn.pool.ntp.org");
         esp_sntp_init();
     }
 
@@ -424,6 +454,9 @@ void enqueuePlayback(std::vector<uint8_t>&& opus)
         _playback_queue.pop_front();
     }
     _playback_queue.emplace_back(std::move(opus));
+    if (_playback_task_handle) {
+        xTaskNotifyGive(_playback_task_handle);
+    }
 }
 
 void playAudioOpus(const uint8_t* data, size_t len)
@@ -452,6 +485,13 @@ void playbackTask(void*)
         return;
     }
 
+    {
+        // handle 的设置/清除/通知都在 _playback_mutex 内，防止 stop 侧对刚自删的
+        // 任务句柄 xTaskNotifyGive。
+        std::lock_guard<std::mutex> lock(_playback_mutex);
+        _playback_task_handle = xTaskGetCurrentTaskHandle();
+    }
+
     // 解码输出已是播放采样率（_opus_decoder_output_rate），无需再重采样。一个下行
     // 包可能含多个 20ms Opus 帧（服务端默认 ~120ms 分包），用 consumed 循环把整包解完。
     const size_t out_frame_samples =
@@ -478,7 +518,9 @@ void playbackTask(void*)
         }
 
         if (opus.empty()) {
-            vTaskDelay(pdMS_TO_TICKS(10));
+            // 队列空/预缓冲未满：阻塞等待入队通知（入队 xTaskNotifyGive 唤醒），
+            // 超时 10ms 兜底重查，避免固定盲等带来的取包延迟与 DMA 欠载。
+            ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(10));
             continue;
         }
 
@@ -524,6 +566,10 @@ void playbackTask(void*)
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(_playback_mutex);
+        _playback_task_handle = nullptr;
+    }
     _playback_task_started.store(false);
     vTaskDeleteWithCaps(nullptr);
 }
@@ -536,7 +582,11 @@ void startPlaybackTask()
     }
 
     _playback_task_running.store(true);
-    if (xTaskCreatePinnedToCoreWithCaps(playbackTask, "volc_play", 32768, nullptr, 5, nullptr, 1,
+    // 绑 core 0：core 1 已被 RTC SDK 任务 + AFE 内部 feed/fetch 任务 + volc_audio 占满，
+    // 播放解码若也在 core 1 会抢占 AFE 处理时间，导致 FEED ringbuffer 来不及排空而溢出
+    // 丢麦克风数据（上行失真、ASR 识别不准）。挪到相对空闲的 core 0（仅 afe_rx/uplink，
+    // 多处于阻塞/间歇态）消除核内争抢。
+    if (xTaskCreatePinnedToCoreWithCaps(playbackTask, "volc_play", 32768, nullptr, 5, nullptr, 0,
                                         MALLOC_CAP_SPIRAM) != pdPASS) {
         _playback_task_running.store(false);
         _playback_task_started.store(false);
@@ -547,7 +597,13 @@ void startPlaybackTask()
 void stopPlaybackTask()
 {
     _playback_task_running.store(false);
-    flushPlaybackQueue();
+    // 清队列并唤醒可能正阻塞等通知的 playbackTask，使其尽快退出循环结束任务。
+    std::lock_guard<std::mutex> lock(_playback_mutex);
+    _playback_queue.clear();
+    _playback_priming.store(true);
+    if (_playback_task_handle) {
+        xTaskNotifyGive(_playback_task_handle);
+    }
 }
 
 // 从 assets 分区加载 WakeNet 模型（srmodels.bin），返回 srmodel_list_t*。
@@ -836,12 +892,20 @@ void audioCaptureTask(void*)
         if (feed_count == 1 || feed_count % 500 == 0) {
             uint64_t mic_sq = 0, ref_sq = 0;
             const size_t probe = std::min<size_t>(src_frames_per_chunk, 256);
+            // 诊断：统计两路通道逐样本相同的数量(same)与最大差值(maxdiff)，
+            // 确认双麦是否读到冗余/同源数据(same≈probe 即两路完全相同)。
+            size_t same = 0;
+            int32_t maxdiff = 0;
             if (channels >= 2) {
                 for (size_t i = 0; i < probe; ++i) {
                     int32_t m = input_buf[i * channels + 0];
                     int32_t r = input_buf[i * channels + channels - 1];
                     mic_sq += static_cast<uint64_t>(m * m);
                     ref_sq += static_cast<uint64_t>(r * r);
+                    int32_t d = m - r;
+                    if (d == 0) ++same;
+                    if (d < 0) d = -d;
+                    if (d > maxdiff) maxdiff = d;
                 }
             } else {
                 for (size_t i = 0; i < probe; ++i) {
@@ -853,8 +917,9 @@ void audioCaptureTask(void*)
                                   std::sqrt(static_cast<double>(mic_sq) / probe)) : 0;
             uint32_t ref_rms = probe ? static_cast<uint32_t>(
                                   std::sqrt(static_cast<double>(ref_sq) / probe)) : 0;
-            mclog::tagInfo(_tag, "afe feed frames={} chunk={} mic_rms={} ref_rms={}",
-                           feed_count, feed_chunk, mic_rms, ref_rms);
+            mclog::tagInfo(_tag,
+                           "afe feed frames={} chunk={} mic_rms={} ref_rms={} same={}/{} maxdiff={}",
+                           feed_count, feed_chunk, mic_rms, ref_rms, same, probe, maxdiff);
         }
     }
 
@@ -920,6 +985,11 @@ void afeFetchTask(void*)
                     Board::GetInstance().GetDisplay()->SetChatMessage("system", "待连接");
                     continue;
                 }
+                // startConversation 阻塞在 RTC 建联期间 stop() 可能已发起拆除并在
+                // 等本任务退出；此时 AFE/显示资源即将释放，立刻退出不再触碰。
+                if (!_afe_fetch_running.load()) {
+                    break;
+                }
                 _conversation_active.store(true);
                 // 会话期关闭 WakeNet：对话中不再靠唤醒词进入（退出由 idle timeout +
                 // 服务端打断驱动），关掉每帧的唤醒词 CNN 推理给 core 1 显著减负。
@@ -927,6 +997,9 @@ void afeFetchTask(void*)
                     _afe_iface->disable_wakenet(_afe_data);
                 }
                 _last_activity_us.store(now_us);
+                // 建联后默认进入聆听态，保证 onConversationStatus 首个状态到达前
+                // 上行门控不会因残留的 THINKING/ANSWERING 状态误丢用户首句话。
+                _conv_status.store(static_cast<int>(VOLC_CONV_STATUS_LISTENING));
                 uplink_accum.clear();
                 Board::GetInstance().GetDisplay()->SetChatMessage("system", "连接成功");
                 uiListening();
@@ -945,6 +1018,7 @@ void afeFetchTask(void*)
         if ((now_us - _last_activity_us.load()) > _conv_idle_timeout_ms * 1000) {
             mclog::tagInfo(_tag, "conversation idle timeout, back to wake-wait");
             _conversation_active.store(false);
+            _conv_status.store(0);
             stopConversation();
             // 回待机：重新开启 WakeNet 并清空 ringbuf，丢弃会话期残留音频避免误唤醒。
             if (_afe_iface->enable_wakenet) {
@@ -962,30 +1036,42 @@ void afeFetchTask(void*)
         const size_t in_samples = res->data_size / sizeof(int16_t);
         uplink_accum.insert(uplink_accum.end(), res->data, res->data + in_samples);
 
+        // 半双工门控（基于会话状态）：仅在 ANSWERING 期间扬声器实际播放 TTS、麦克风采到
+        // 的主要是回声，丢弃不上行。THINKING 期扬声器是静默的（无回声），此时用户可能仍在
+        // 补充说话或想打断，必须持续上行；LISTENING/INTERRUPTED/ANSWER_FINISH 同理是用户
+        // 说话窗口，绝不丢帧。
+        const int conv = _conv_status.load();
+        const bool model_busy = (conv == VOLC_CONV_STATUS_ANSWERING);
+
         while (uplink_accum.size() >= _opus_uplink_frame_samples) {
-            // 只把 PCM 帧入队，编码+网络发送交给 volc_uplink 任务。fetch 循环保持轻量，
-            // 即使网络发送阻塞也不会卡住 fetch()，从而避免 AFE FEED ringbuffer 溢出丢麦克风数据。
-            enqueueUplink(uplink_accum.data(), _opus_uplink_frame_samples);
+            if (!model_busy) {
+                // 只把 PCM 帧入队，编码+网络发送交给 volc_uplink 任务。fetch 循环保持轻量，
+                // 即使网络发送阻塞也不会卡住 fetch()，从而避免 AFE FEED ringbuffer 溢出丢麦克风数据。
+                enqueueUplink(uplink_accum.data(), _opus_uplink_frame_samples);
 
-            ++uplink_frames;
+                ++uplink_frames;
 
-            // 上行能量：用于（a）日志监控（b）检测用户是否在讲话以刷新空闲计时。
-            uint64_t out_sq = 0;
-            const size_t probe = std::min<size_t>(_opus_uplink_frame_samples, 256);
-            for (size_t i = 0; i < probe; ++i) {
-                int32_t v = uplink_accum[i];
-                out_sq += static_cast<uint64_t>(v * v);
-            }
-            uint32_t out_rms = probe ? static_cast<uint32_t>(
-                                  std::sqrt(static_cast<double>(out_sq) / probe)) : 0;
-            if (out_rms >= _uplink_active_rms) {
-                _last_activity_us.store(esp_timer_get_time());
-            }
-            if (uplink_frames == 1 || uplink_frames % 250 == 0) {
-                mclog::tagInfo(_tag, "afe uplink frames={} vad={} samples={} out_rms={}",
-                               uplink_frames, static_cast<int>(res->vad_state),
-                               static_cast<int>(_opus_uplink_frame_samples),
-                               out_rms);
+                // 上行能量 + 削波诊断：peak 为帧内最大幅值，clip 为接近满量程(±32000)
+                // 的样本数。用于确认 ES7210 input_gain 是否过高导致硬削波劣化 ASR。
+                uint64_t out_sq = 0;
+                int32_t peak = 0;
+                int clip = 0;
+                for (size_t i = 0; i < _opus_uplink_frame_samples; ++i) {
+                    int32_t v = uplink_accum[i];
+                    out_sq += static_cast<uint64_t>(v * v);
+                    int32_t a = v < 0 ? -v : v;
+                    if (a > peak) peak = a;
+                    if (a >= 32000) ++clip;
+                }
+                uint32_t out_rms = static_cast<uint32_t>(
+                    std::sqrt(static_cast<double>(out_sq) / _opus_uplink_frame_samples));
+                if (out_rms >= _uplink_active_rms) {
+                    _last_activity_us.store(esp_timer_get_time());
+                }
+                if (uplink_frames == 1 || uplink_frames % 100 == 0 || clip > 0) {
+                    mclog::tagInfo(_tag, "afe uplink frames={} rms={} peak={} clip={}",
+                                   uplink_frames, out_rms, peak, clip);
+                }
             }
 
             uplink_accum.erase(uplink_accum.begin(),
@@ -1240,6 +1326,11 @@ void onConversationStatus(volc_engine_t, volc_conv_status_e status, void*)
     if (!_conversation_active.load()) {
         return;
     }
+    // 记录会话状态供上行门控判断：THINKING/ANSWERING 期间停采集，其余期间正常上行。
+    _conv_status.store(static_cast<int>(status));
+    // 任何状态流转都视为会话活跃，刷新空闲计时：避免模型思考/回复期间（无上行人声、
+    // thinking 期亦无下行音频）被 idle timeout 误判断联。
+    _last_activity_us.store(esp_timer_get_time());
     sendExternalDatePromptIfNeeded();
     switch (status) {
         case VOLC_CONV_STATUS_LISTENING:
@@ -1403,6 +1494,17 @@ std::string dispatchTool(const char* tool_name, const char* args_json)
         int id = jsonInt(args, "id", -1);
         tools::stop_reminder(id);
         result = R"({"ok":true})";
+    } else if (std::strcmp(tool_name, "self.robot.get_volume") == 0) {
+        auto codec = Board::GetInstance().GetAudioCodec();
+        int volume = codec ? codec->output_volume() : 0;
+        result = fmt::format(R"({{"volume":{}}})", volume);
+    } else if (std::strcmp(tool_name, "self.robot.set_volume") == 0) {
+        int volume = std::clamp(jsonInt(args, "volume", 70), 0, 100);
+        auto codec = Board::GetInstance().GetAudioCodec();
+        if (codec) {
+            codec->SetOutputVolume(volume);
+        }
+        result = fmt::format(R"({{"ok":true,"volume":{}}})", volume);
     }
 
     cJSON_Delete(args);
@@ -1415,7 +1517,14 @@ void sendToolResult(volc_engine_t engine, const char* call_id, const std::string
     cJSON_AddStringToObject(root, "ToolCallID", call_id ? call_id : "");
     cJSON_AddStringToObject(root, "Content", content.c_str());
 
-    const int ret = sendBinaryJsonMessage(engine, "func", root);
+    // 工具执行可能耗时数秒，期间引擎可能已被 stop() 销毁；持锁校验后再发送。
+    int ret = -1;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (_running && _engine && engine == _engine) {
+            ret = sendBinaryJsonMessage(_engine, "func", root);
+        }
+    }
     mclog::tagInfo(_tag, "tool result sent ret={} id={}", ret, call_id ? call_id : "");
 
     cJSON_Delete(root);
@@ -1442,6 +1551,59 @@ void handleToolMessage(volc_engine_t engine, cJSON* root)
     }
 }
 
+void toolDispatchTask(void*)
+{
+    while (_tool_task_running.load()) {
+        std::string payload;
+        {
+            std::lock_guard<std::mutex> lock(_tool_mutex);
+            if (!_tool_queue.empty()) {
+                payload = std::move(_tool_queue.front());
+                _tool_queue.pop_front();
+            }
+        }
+        if (payload.empty()) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+
+        cJSON* root = cJSON_ParseWithLength(payload.data(), payload.size());
+        if (!root) {
+            mclog::tagWarn(_tag, "tool message json parse failed");
+            continue;
+        }
+        // _engine 在 stop() 等待本任务退出后才 destroy，这里使用是安全的。
+        handleToolMessage(_engine, root);
+        cJSON_Delete(root);
+    }
+    _tool_task_started.store(false);
+    vTaskDeleteWithCaps(nullptr);
+}
+
+void startToolTask()
+{
+    bool expected = false;
+    if (!_tool_task_started.compare_exchange_strong(expected, true)) {
+        return;
+    }
+    _tool_task_running.store(true);
+    // 任务栈放 PSRAM，原因同 startAudioBridge。工具执行会拿 LVGL 锁并做舵机动作，
+    // 低优先级 + core 0 即可，不与音频管线抢核。
+    if (xTaskCreatePinnedToCoreWithCaps(toolDispatchTask, "volc_tool", 8192, nullptr, 3, nullptr, 0,
+                                        MALLOC_CAP_SPIRAM) != pdPASS) {
+        _tool_task_running.store(false);
+        _tool_task_started.store(false);
+        mclog::tagError(_tag, "failed to create tool task");
+    }
+}
+
+void stopToolTask()
+{
+    _tool_task_running.store(false);
+    std::lock_guard<std::mutex> lock(_tool_mutex);
+    _tool_queue.clear();
+}
+
 void handleSubtitleMessage(cJSON* root)
 {
     cJSON* type = cJSON_GetObjectItem(root, "type");
@@ -1455,17 +1617,60 @@ void handleSubtitleMessage(cJSON* root)
         return;
     }
 
-    std::string subtitle;
+    // 字幕流式刷新状态（按角色各自维护，bot=TTS / user=ASR）。火山协议：
+    //   definite=false              说话中：同一句的累积增量稿，用 sequence 大的覆盖小的，
+    //                               丢弃迟到的旧序号帧（否则旧帧回退已显示文本，造成残缺/跳变）。
+    //   definite=true,paragraph=F   分句结束：本句定稿，下一句从头覆盖（重置序号水位）。
+    //   definite=true,paragraph=T   整轮结束：定稿，重置水位，避免后续帧重复叠加。
+    struct SubtitleState {
+        int last_seq = -1;     // 当前句已显示的最大 sequence
+        bool sentence_done = false;  // 上一帧是否已定稿（下一帧应重新起句）
+    };
+    static SubtitleState _bot_state;
+    static SubtitleState _user_state;
+
     cJSON* item = nullptr;
     cJSON_ArrayForEach(item, data) {
         cJSON* text = cJSON_GetObjectItem(item, "text");
         const char* value = cJSON_GetStringValue(text);
-        if (value && value[0]) {
-            subtitle += value;
+        cJSON* user_id = cJSON_GetObjectItem(item, "userId");
+        const char* uid = cJSON_GetStringValue(user_id);
+        cJSON* definite_json = cJSON_GetObjectItem(item, "definite");
+        cJSON* paragraph_json = cJSON_GetObjectItem(item, "paragraph");
+        cJSON* sequence_json = cJSON_GetObjectItem(item, "sequence");
+        const bool definite = cJSON_IsTrue(definite_json);
+        const bool paragraph = cJSON_IsTrue(paragraph_json);
+        const int seq = sequence_json ? sequence_json->valueint : -1;
+        if (!value || !value[0]) {
+            continue;
         }
-    }
-    if (!subtitle.empty()) {
-        Board::GetInstance().GetDisplay()->SetChatMessage("assistant", subtitle.c_str());
+
+        // 按 userId 区分角色：bot* 是下行 TTS（assistant），其余是上行用户语音（user）。
+        const bool is_bot = uid && std::strncmp(uid, "bot", 3) == 0;
+        SubtitleState& state = is_bot ? _bot_state : _user_state;
+
+        // 新句的第一帧（上一帧已定稿）：重置序号水位，从头覆盖显示前一句。
+        if (state.sentence_done) {
+            state.last_seq = -1;
+            state.sentence_done = false;
+        }
+
+        // 说话中：丢弃迟到的旧序号帧，避免回退已显示的更新文本。
+        if (seq >= 0 && seq < state.last_seq) {
+            continue;
+        }
+        if (seq >= 0) {
+            state.last_seq = seq;
+        }
+
+        // text 为本句累积全文，直接覆盖渲染。ASR(user) 与 TTS(assistant) 同走气泡显示。
+        Board::GetInstance().GetDisplay()->SetChatMessage(is_bot ? "assistant" : "user", value);
+
+        // 本句定稿（分句或整轮结束）：标记下一帧重新起句。
+        if (definite) {
+            state.sentence_done = true;
+            (void)paragraph;
+        }
     }
 }
 
@@ -1475,7 +1680,6 @@ void onMessageData(volc_engine_t, const void* data, size_t len, volc_message_inf
         return;
     }
 
-    mclog::tagInfo(_tag, "message received: {} bytes", len);
     const char* text = static_cast<const char*>(data);
     if (len > 8 && (std::memcmp(text, "tool", 4) == 0 || std::memcmp(text, "subv", 4) == 0)) {
         const size_t payload_len =
@@ -1488,17 +1692,24 @@ void onMessageData(volc_engine_t, const void* data, size_t len, volc_message_inf
             return;
         }
         std::string payload(text + 8, payload_len);
+        if (std::memcmp(text, "tool", 4) == 0) {
+            // 工具执行可能长时间阻塞（舵机动作等），不能占住 SDK 收包线程，
+            // 入队交给 volc_tool 任务执行并回传结果。
+            std::lock_guard<std::mutex> lock(_tool_mutex);
+            if (_tool_queue.size() >= _tool_queue_max) {
+                _tool_queue.pop_front();
+            }
+            _tool_queue.emplace_back(std::move(payload));
+            return;
+        }
+
+        mclog::tagInfo(_tag, "subv payload: {}", payload.c_str());
         cJSON* root = cJSON_ParseWithLength(payload.data(), payload.size());
         if (!root) {
             mclog::tagWarn(_tag, "message json parse failed");
             return;
         }
-
-        if (std::memcmp(text, "tool", 4) == 0) {
-            handleToolMessage(_engine, root);
-        } else {
-            handleSubtitleMessage(root);
-        }
+        handleSubtitleMessage(root);
         cJSON_Delete(root);
     } else if (std::memchr(text, 0, len) == nullptr) {
         std::string message(text, len);
@@ -1554,9 +1765,11 @@ namespace volc_agent {
 
 bool start()
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-    if (_running) {
-        return true;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (_running) {
+            return true;
+        }
     }
 
     if (!hasRequiredConfig()) {
@@ -1564,8 +1777,15 @@ bool start()
         return false;
     }
 
+    // SNTP 等待最长 10s，放在锁外执行：持 _mutex 等待会卡住 UI 线程的
+    // isRunning()/interrupt() 调用，表现为进入链路期间整机冻住。
     if (!waitForSystemTime()) {
         mclog::tagWarn(_tag, "system time not synced before volc_start");
+    }
+
+    std::lock_guard<std::mutex> lock(_mutex);
+    if (_running) {
+        return true;
     }
 
     const std::string device_name = getDeviceName();
@@ -1629,6 +1849,7 @@ bool start()
 
     startAfeFetch();
     startUplinkTask();
+    startToolTask();
     startAudioBridge();
     // 视频桥暂时禁用：摄像头的 mmap buffer (~150KB) + JPEG 编码会进一步压低内部 SRAM，
     // 当前 AEC + AFE 已经把可用 SRAM 压到 5KB 以下，先把视频路径让给音频确保链路活下来。
@@ -1646,21 +1867,31 @@ void stop()
     stopAudioBridge();
     stopAfeFetch();
     stopUplinkTask();
+    stopToolTask();
     stopVideoBridge();
     stopPlaybackTask();
 
-    // Wait for capture/fetch/uplink tasks to drain before tearing down AFE and
-    // the Opus codec so we don't free the iface/codec while another task is
-    // still inside feed/fetch/encode/decode.
-    for (int i = 0; i < 50; ++i) {
+    // Wait for capture/fetch/uplink/playback/tool tasks to drain before tearing
+    // down AFE and the Opus codec so we don't free the iface/codec while another
+    // task is still inside feed/fetch/encode/decode. afeFetchTask 可能正阻塞在
+    // startConversation()（RTC 建联，弱网下可达数秒），等满 15s 仍未退出时跳过
+    // 资源释放：泄漏一份 AFE/Opus 优于拆掉在用资源触发 LoadProhibited。
+    bool tasks_exited = false;
+    for (int i = 0; i < 750; ++i) {
         if (!_audio_task_started.load() && !_afe_fetch_started.load() &&
-            !_uplink_task_started.load() && !_playback_task_started.load()) {
+            !_uplink_task_started.load() && !_playback_task_started.load() &&
+            !_tool_task_started.load()) {
+            tasks_exited = true;
             break;
         }
         vTaskDelay(pdMS_TO_TICKS(20));
     }
-    deinitAfe();
-    deinitOpusCodec();
+    if (tasks_exited) {
+        deinitAfe();
+        deinitOpusCodec();
+    } else {
+        mclog::tagError(_tag, "audio tasks still alive after 15s, skip AFE/Opus teardown");
+    }
 
     std::lock_guard<std::mutex> lock(_mutex);
     if (!_engine) {
@@ -1706,6 +1937,8 @@ bool interrupt()
         std::lock_guard<std::mutex> lock(_mutex);
         // 待机未唤醒(会话未建联)时点击无对话可打断，直接忽略。
         if (!_running || !_engine || !_conv_started.load()) {
+            mclog::tagInfo(_tag, "interrupt ignored: running={} engine={} conv_started={}",
+                           _running, _engine != nullptr, _conv_started.load());
             return false;
         }
     }
@@ -1731,6 +1964,7 @@ bool interrupt()
         mclog::tagWarn(_tag, "interrupt send failed: {}", ret);
         return false;
     }
+    mclog::tagInfo(_tag, "interrupt sent");
     return true;
 }
 

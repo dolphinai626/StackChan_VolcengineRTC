@@ -64,6 +64,9 @@ CONFIG_ESP_WIFI_IRAM_OPT=n
 CONFIG_ESP_WIFI_RX_IRAM_OPT=n
 CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
 CONFIG_LWIP_TCPIP_RECVMBOX_SIZE=16
+# startSntp 配置了 3 个 NTP 服务器（pool.ntp.org 在部分网络不可达时回落），
+# 默认上限 1 会让索引 1/2 被 lwip 静默丢弃。
+CONFIG_LWIP_SNTP_MAX_SERVERS=3
 
 # FreeRTOS — keep run-time stats off by default; native enables it but we keep parity
 CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
