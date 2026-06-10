@@ -1,0 +1,194 @@
+docs/DESIGN.md
+  eee3a75946686357 212-220,234,237-247,251-253,263,265-266,364
+firmware/main/hal/board/stackchan_display.cc
+  049cde31a577dd43 401-402 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a2935ac2a5b17c8e3c64e3e","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[401,402]}]}]}
+firmware/main/apps/app_ai_agent/volc_agent.cpp
+  eee3a75946686357 75-77,82-86,100-109,151-157,166-167,241-242,245-246,457-459,488-494,521-523,569-572,585-589,600-606,895-898,905-908,920-922,988-992,1000-1002,1021,1039-1045,1047-1074,1329-1333,1497-1507,1874-1875,1882-1883,1940-1941,1967
+  049cde31a577dd43 1695-1706,1712,1768-1772,1780-1781,1786-1790,1852,1870,1876-1880,1884,1889-1894 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a2935ac2a5b17c8e3c64e3e","tool_type":"agent","tool_id":"RunCommand","line_ranges":[{"Range":[1695,1706]},{"Single":1712},{"Range":[1768,1772]},{"Range":[1780,1781]},{"Range":[1786,1790]},{"Single":1852},{"Single":1870},{"Range":[1876,1880]},{"Single":1884},{"Range":[1889,1894]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.3.4",
+  "base_commit_sha": "444c53dd62300c45552b8b16a64313aa40ef45f5",
+  "prompts": {
+    "049cde31a577dd43": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a27c5da2a5b17c8e3c647d6",
+        "model": "openrouter-3o__dev"
+      },
+      "human_author": "dolphinai626 <dolphinai626@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 276,
+      "overriden_lines": 0
+    },
+    "eee3a75946686357": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a1d03651ab287ef41163728",
+        "model": "openrouter-3o__dev"
+      },
+      "human_author": "dolphinai626 <dolphinai626@users.noreply.github.com>",
+      "messages": [],
+      "total_additions": 0,
+      "total_deletions": 0,
+      "accepted_lines": 69,
+      "overriden_lines": 0
+    }
+  },
+  "attestation_metadata": {
+    "firmware/main/apps/app_ai_agent/volc_agent.cpp": [
+      {
+        "hash": "049cde31a577dd43",
+        "line_ranges": [
+          {
+            "Range": [
+              1695,
+              1706
+            ]
+          },
+          {
+            "Single": 1712
+          },
+          {
+            "Range": [
+              1768,
+              1772
+            ]
+          },
+          {
+            "Range": [
+              1780,
+              1781
+            ]
+          },
+          {
+            "Range": [
+              1786,
+              1790
+            ]
+          },
+          {
+            "Single": 1852
+          },
+          {
+            "Single": 1870
+          },
+          {
+            "Range": [
+              1876,
+              1880
+            ]
+          },
+          {
+            "Single": 1884
+          },
+          {
+            "Range": [
+              1889,
+              1894
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a2935ac2a5b17c8e3c64e3e",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  1695,
+                  1706
+                ]
+              },
+              {
+                "Single": 1712
+              },
+              {
+                "Range": [
+                  1768,
+                  1772
+                ]
+              },
+              {
+                "Range": [
+                  1780,
+                  1781
+                ]
+              },
+              {
+                "Range": [
+                  1786,
+                  1790
+                ]
+              },
+              {
+                "Single": 1852
+              },
+              {
+                "Single": 1870
+              },
+              {
+                "Range": [
+                  1876,
+                  1880
+                ]
+              },
+              {
+                "Single": 1884
+              },
+              {
+                "Range": [
+                  1889,
+                  1894
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/hal/board/stackchan_display.cc": [
+      {
+        "hash": "049cde31a577dd43",
+        "line_ranges": [
+          {
+            "Range": [
+              401,
+              402
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a2935ac2a5b17c8e3c64e3e",
+            "tool_type": "agent",
+            "tool_id": "RunCommand",
+            "line_ranges": [
+              {
+                "Range": [
+                  401,
+                  402
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "049cde31a577dd43": {
+      "tool": "trae",
+      "conversation_id": "6a27c5da2a5b17c8e3c647d6",
+      "session_id": "6a27c5da2a5b17c8e3c647d6",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}
