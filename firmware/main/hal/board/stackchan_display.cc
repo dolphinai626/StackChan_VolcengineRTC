@@ -16,6 +16,8 @@
 #include <lvgl_theme.h>
 #include <stackchan/stackchan.h>
 #include <assets/lang_config.h>
+#include <assets.h>
+#include <cJSON.h>
 #include <hal/hal.h>
 #include <apps/app_ai_agent/volc_agent.h>
 
@@ -232,6 +234,48 @@ lv_disp_t* StackChanAvatarDisplay::GetLvglDisplay()
 
 #include <hal/board/hal_bridge.h>
 
+// 气泡字幕需要完整中文字形：内置 BUILTIN_TEXT_FONT 是仅 ~800 字的 basic 子集，
+// LVGL 对缺失字形静默跳过，字幕表现为随机缺字（如"我[是]你的AI[助]手"）。
+// assets 分区打包了完整 common 字体（index.json 的 "text_font"），xiaozhi 链路
+// 经 assets.Apply() 装载进主题，火山链路不走该路径，这里直接读出供气泡使用。
+static const lv_font_t* LoadAssetsTextFont()
+{
+    auto& assets = Assets::GetInstance();
+    if (!assets.partition_valid()) {
+        return nullptr;
+    }
+
+    void* idx_ptr   = nullptr;
+    size_t idx_size = 0;
+    if (!assets.GetAssetData("index.json", idx_ptr, idx_size)) {
+        return nullptr;
+    }
+    cJSON* root = cJSON_ParseWithLength(static_cast<char*>(idx_ptr), idx_size);
+    if (!root) {
+        return nullptr;
+    }
+
+    const lv_font_t* result = nullptr;
+    cJSON* font             = cJSON_GetObjectItem(root, "text_font");
+    if (cJSON_IsString(font)) {
+        void* ptr   = nullptr;
+        size_t size = 0;
+        if (assets.GetAssetData(font->valuestring, ptr, size)) {
+            // 字体对象需常驻（label 持续引用），用 static 持有生命周期。
+            static std::shared_ptr<LvglCBinFont> _assets_text_font;
+            _assets_text_font = std::make_shared<LvglCBinFont>(ptr);
+            if (_assets_text_font->font()) {
+                result = _assets_text_font->font();
+                ESP_LOGI(TAG, "speech bubble font: assets %s", font->valuestring);
+            }
+        } else {
+            ESP_LOGW(TAG, "assets text font %s not found, fallback to builtin", font->valuestring);
+        }
+    }
+    cJSON_Delete(root);
+    return result;
+}
+
 void StackChanAvatarDisplay::SetupUI()
 {
     // Prevent duplicate calls - if already called, return early
@@ -254,9 +298,10 @@ void StackChanAvatarDisplay::SetupUI()
     ESP_LOGI(TAG, "Creating Stack-chan Avatar...");
 
     auto avatar = std::make_unique<DefaultAvatar>();
-    // 气泡台词/字幕用内置中文字体（font_puhui_basic_20_4，含 CJK），
-    // 否则默认 lv_font_montserrat_16 只含 ASCII，中文字幕显示为空白。
-    avatar->init(lv_screen_active(), &BUILTIN_TEXT_FONT);
+    // 气泡字体优先用 assets 分区完整 common 字体（覆盖全部常用汉字），
+    // assets 不可用时回落 ~800 字的 BUILTIN_TEXT_FONT（字幕可能缺字）。
+    auto assets_font = LoadAssetsTextFont();
+    avatar->init(lv_screen_active(), assets_font ? assets_font : &BUILTIN_TEXT_FONT);
     avatar->getPanel()->onClick().connect([]() {
         if (volc_agent::isRunning()) {
             volc_agent::interrupt();

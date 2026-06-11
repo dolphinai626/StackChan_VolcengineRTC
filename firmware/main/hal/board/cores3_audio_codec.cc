@@ -14,9 +14,11 @@ CoreS3AudioCodec::CoreS3AudioCodec(void* i2c_master_handle, int input_sample_rat
     input_channels_ = 2; // 输入通道数
     input_sample_rate_ = input_sample_rate;
     output_sample_rate_ = output_sample_rate;
-    // ES7210 PGA 物理上限 37.5dB，传 60 会被驱动钳到最大档 37.5dB，近场说话易硬削波
-    // 劣化 ASR。对齐官方同款 CoreS3 板的 30dB（30dB 档），留出余量避免削波。
-    input_gain_ = 30;
+    // ES7210 PGA 物理上限 37.5dB。实测 30dB 档正常对话人声仅 ~6% 满量程
+    // （rms~700/32767），云端 VAD 检测滞后 ~2s 且低能量段被当静音提前断句；
+    // 提到 36dB 档让人声达到健康电平。TTS 回声会更强，但回声由上行门控拦截，
+    // 不进 ASR。若 env 日志出现持续 clip>0 再回调。
+    input_gain_ = 36;
 
     CreateDuplexChannels(mclk, bclk, ws, dout, din);
 
