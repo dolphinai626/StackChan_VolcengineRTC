@@ -3,13 +3,19 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
-## 2026-06-12 [claude] VeRTC 视觉采集排查 + 2s/帧 MJPEG 低频上传
+## 2026-06-12 [claude] VeRTC 视觉采集 + 工具执行层实测修复（音量崩溃两层根因）
 
-- 占用域：firmware-audio（volc_agent.cpp 视觉桥）⚠ 与 codex 1.4.2 升级会话声明重叠，
-  用户直接指派，完成后立即提交推送供 codex pull
-- 计划：确认视觉采集现状（此前因 SRAM 压力禁用）；评估 MJPEG 采集性能；
-  按 2s/帧 低频启用并经 RTC SDK 发送 JPEG
-- 结果：进行中
+- 占用域：firmware-audio + cores3_audio_codec
+- 视觉采集（已验证）：2s/帧 MJPEG 经 RTC 发送，实测 jpeg≈4KB、enc=95~222ms、
+  sent=true、内部 SRAM 稳定 35KB——低频采集无性能问题（commit dc1f28b）
+- 工具链路首轮真实流量（云端投递已通）：set_head_angles/shake_head 参数与执行全通
+- 音量工具崩溃（已修复+用户实测通过）：
+  1. SetOutputVolume 的 ESP_ERROR_CHECK 在扬声器未打开时 abort 重启
+  2. 基类 NVS 持久化是 flash 写，要求内部栈；volc_tool 是 PSRAM 栈 →
+     esp_task_stack_is_sane 断言重启（"调音量退回主界面"的真因）
+  修复：硬件音量降级告警 + 持久化按调用方栈位置分流（PSRAM 栈 defer 到
+  esp_timer 任务执行），esp_timer 栈 3584→8192（sdkconfig.defaults 同步）
+- 遗留：无
 
 ## 2026-06-12 [codex] StackChan 原生链路对齐 1.4.2 + 禁止自动 OTA 覆盖 VeRTC
 

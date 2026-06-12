@@ -1,6 +1,7 @@
 #include "cores3_audio_codec.h"
 
 #include <esp_log.h>
+#include <esp_memory_utils.h>
 #include <driver/i2c_master.h>
 #include <driver/i2s_tdm.h>
 
@@ -187,8 +188,43 @@ void CoreS3AudioCodec::CreateDuplexChannels(gpio_num_t mclk, gpio_num_t bclk, gp
 }
 
 void CoreS3AudioCodec::SetOutputVolume(int volume) {
-    ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(output_dev_, volume));
-    AudioCodec::SetOutputVolume(volume);
+    // 扬声器设备未打开（无 TTS 播放）时 set_out_vol 返回 WRONG_STATE，不能用
+    // ESP_ERROR_CHECK——abort 直接重启。失败只告警：音量存入 output_volume_，
+    // EnableOutput(true) 打开设备时会重新应用，等效延迟生效。
+    const int err = esp_codec_dev_set_out_vol(output_dev_, volume);
+    if (err != ESP_CODEC_DEV_OK) {
+        ESP_LOGW(TAG, "set_out_vol deferred (dev not open?) err=%d volume=%d", err, volume);
+    }
+
+    // 基类 SetOutputVolume 会写 NVS（SPI flash 写）：flash 写期间 cache 关闭，
+    // 要求调用任务的栈在内部 RAM。volc_tool 等 PSRAM 栈任务直接调用会触发
+    // esp_task_stack_is_sane 断言整机重启（实测"语音调音量退回主界面"）。
+    // 栈在内部 RAM 时直接持久化；在 PSRAM 时把持久化挪到 esp_timer 任务（内部栈）。
+    int stack_probe = 0;
+    if (esp_ptr_internal(&stack_probe)) {
+        AudioCodec::SetOutputVolume(volume);
+        return;
+    }
+
+    output_volume_ = volume;  // 立即生效，持久化异步完成
+    pending_volume_save_.store(volume);
+    if (!volume_save_timer_) {
+        const esp_timer_create_args_t args = {
+            .callback = [](void* arg) {
+                auto* self = static_cast<CoreS3AudioCodec*>(arg);
+                self->AudioCodec::SetOutputVolume(self->pending_volume_save_.load());
+            },
+            .arg = this,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "vol_save",
+            .skip_unhandled_events = true,
+        };
+        if (esp_timer_create(&args, &volume_save_timer_) != ESP_OK) {
+            ESP_LOGW(TAG, "volume save timer create failed, volume not persisted");
+            return;
+        }
+    }
+    esp_timer_start_once(volume_save_timer_, 0);
 }
 
 void CoreS3AudioCodec::EnableInput(bool enable) {

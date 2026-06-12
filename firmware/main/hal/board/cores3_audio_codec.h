@@ -5,9 +5,14 @@
 
 #include <esp_codec_dev.h>
 #include <esp_codec_dev_defaults.h>
+#include <esp_timer.h>
+#include <atomic>
 
 class CoreS3AudioCodec : public AudioCodec {
 private:
+    // 音量 NVS 持久化的延迟执行（见 SetOutputVolume 注释）。
+    esp_timer_handle_t volume_save_timer_ = nullptr;
+    std::atomic<int> pending_volume_save_{-1};
     const audio_codec_data_if_t* data_if_ = nullptr;
     const audio_codec_ctrl_if_t* out_ctrl_if_ = nullptr;
     const audio_codec_if_t* out_codec_if_ = nullptr;

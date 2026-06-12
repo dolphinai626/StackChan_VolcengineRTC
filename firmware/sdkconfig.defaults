@@ -135,3 +135,7 @@ CONFIG_VOLC_BOT_ID=""
 
 # OTA
 CONFIG_ESP_HTTPS_OTA_ALLOW_HTTP=n
+
+# esp_timer 任务栈加大：音量 NVS 持久化从 PSRAM 栈任务 defer 到 esp_timer 任务执行
+# （flash 写要求内部栈），默认 3584 对 NVS 写偏紧。
+CONFIG_ESP_TIMER_TASK_STACK_SIZE=8192
