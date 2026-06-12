@@ -3,6 +3,24 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [claude] VeRTC 视觉采集排查 + 2s/帧 MJPEG 低频上传
+
+- 占用域：firmware-audio（volc_agent.cpp 视觉桥）⚠ 与 codex 1.4.2 升级会话声明重叠，
+  用户直接指派，完成后立即提交推送供 codex pull
+- 计划：确认视觉采集现状（此前因 SRAM 压力禁用）；评估 MJPEG 采集性能；
+  按 2s/帧 低频启用并经 RTC SDK 发送 JPEG
+- 结果：进行中
+
+## 2026-06-12 [codex] StackChan 原生链路对齐 1.4.2 + 禁止自动 OTA 覆盖 VeRTC
+
+- 占用域：firmware-ui + firmware-audio + sdk-patches + docs-cloud
+- 计划：对比 m5stack/StackChan 最新开源版本与本地原生链路；把 Xiaozhi/StackChan 系统自动升级改为手动拉取/拷贝升级流程；保护 VeRTC/Volcengine 链路不被 OTA 覆盖；验证并记录 AI.Agent 与 VeRTC.Agent 回归
+- 结果：已对比 m5stack/StackChan main `fd09a744`（v1.4.2 firmware update），未接入会绕过首页的 `skip_mooncake`；
+  已禁用 Xiaozhi `CheckNewVersion()` 自动固件 OTA、移除 `self.upgrade_firmware`，并把 About 页系统更新改为只提示手动升级；
+  已同步 1.4.2 motion 数学拆分，更新 `firmware/patches/xiaozhi-esp32.patch` 与 `AGENTS.md` OTA 禁用规则；
+  `git apply --check firmware/patches/xiaozhi-esp32.patch`（基于 `78/xiaozhi-esp32@v2.2.4`）通过，`idf.py reconfigure build` 通过
+- 遗留：未烧录；`/dev/cu.usbmodem2101` 被 Claude 视觉采集进程 PID 67539 占用（写 `/tmp/stackchan_vision.log`），本会话未终止他人采集
+
 ## 2026-06-12 [codex] 同步 StackChan 原生升级隔离规则并重新烧录
 
 - 占用域：docs-cloud

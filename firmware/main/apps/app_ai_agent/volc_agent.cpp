@@ -188,7 +188,10 @@ constexpr int _opus_downlink_frame_ms = 20;
 constexpr size_t _opus_uplink_frame_samples = _volc_audio_sample_rate * _opus_uplink_frame_ms / 1000;
 constexpr int _opus_bitrate = 24000;
 constexpr size_t _doa_window_frames = 1024;
-constexpr int _video_frame_interval_ms = 3000;
+// 低频视觉采集：2s/帧。软编码 QVGA JPEG 单帧 ~100-300ms CPU，0.5fps 下占空比
+// <15%、prio 3 随时被音频任务抢占；帧副本与 JPEG 缓冲均在 PSRAM，对紧张的内部
+// SRAM 无增量压力（V4L2 mmap 缓冲是板级初始化就常驻的，与视觉桥开关无关）。
+constexpr int _video_frame_interval_ms = 2000;
 
 // RTC opus 参数是 RTP 打包合同，不是编码器输入参数：Opus 的 RTP 时钟按 RFC 7587
 // 恒为 48000，s_samples_per_frame 是每包时间戳步进（48k 时钟下 20ms 包 = 960），
@@ -1267,37 +1270,53 @@ void stopAfeFetch()
 
 void videoCaptureTask(void*)
 {
+    uint32_t frame_count = 0;
     while (_video_task_running.load()) {
-        auto camera = hal_bridge::board_get_camera();
-        if (!camera) {
-            vTaskDelay(pdMS_TO_TICKS(_video_frame_interval_ms));
+        vTaskDelay(pdMS_TO_TICKS(_video_frame_interval_ms));
+        if (!_video_task_running.load()) {
+            break;
+        }
+        // 仅会话期取帧上传：待机期不编码不发送（传感器/V4L2 流是板级常开的，
+        // 这里省下的是编码 CPU 与上行带宽）。
+        if (!_conversation_active.load()) {
             continue;
         }
 
-        if (camera->StreamCaptures()) {
-            const uint8_t* frame_data = camera->GetFrameData();
-            size_t frame_size         = camera->GetFrameSize();
-            int width                 = camera->GetFrameWidth();
-            int height                = camera->GetFrameHeight();
-            int format                = camera->GetFrameFormat();
-
-            uint8_t* jpeg_data = nullptr;
-            size_t jpeg_len    = 0;
-            if (frame_data && frame_size > 0 &&
-                image_to_jpeg((uint8_t*)frame_data, frame_size, width, height, (v4l2_pix_fmt_t)format, 20,
-                              &jpeg_data, &jpeg_len)) {
-                if (jpeg_data) {
-                    volc_agent::sendVideoJpeg(jpeg_data, jpeg_len);
-                    free(jpeg_data);
-                }
-            }
+        auto camera = hal_bridge::board_get_camera();
+        if (!camera || !camera->StreamCaptures()) {
+            continue;
         }
 
-        vTaskDelay(pdMS_TO_TICKS(_video_frame_interval_ms));
+        const uint8_t* frame_data = camera->GetFrameData();
+        size_t frame_size         = camera->GetFrameSize();
+        int width                 = camera->GetFrameWidth();
+        int height                = camera->GetFrameHeight();
+        int format                = camera->GetFrameFormat();
+        if (!frame_data || frame_size == 0) {
+            continue;
+        }
+
+        const int64_t t0   = esp_timer_get_time();
+        uint8_t* jpeg_data = nullptr;
+        size_t jpeg_len    = 0;
+        if (image_to_jpeg((uint8_t*)frame_data, frame_size, width, height, (v4l2_pix_fmt_t)format, 20,
+                          &jpeg_data, &jpeg_len) &&
+            jpeg_data) {
+            const int64_t encode_ms = (esp_timer_get_time() - t0) / 1000;
+            const bool sent         = volc_agent::sendVideoJpeg(jpeg_data, jpeg_len);
+            free(jpeg_data);
+
+            ++frame_count;
+            // 每帧性能取证：编码耗时 + JPEG 体积 + 内部 SRAM 余量，用于回答
+            // "MJPEG 采集是否造成性能不足"。持续 sram 走低或 encode 飙升即告警。
+            mclog::tagInfo(_tag, "video frame#{} {}x{} jpeg={}B enc={}ms sent={} sram={}",
+                           frame_count, width, height, jpeg_len, encode_ms, sent,
+                           heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+        }
     }
 
     _video_task_started.store(false);
-    vTaskDelete(nullptr);
+    vTaskDeleteWithCaps(nullptr);
 }
 
 void startVideoBridge()
@@ -1308,7 +1327,11 @@ void startVideoBridge()
     }
 
     _video_task_running.store(true);
-    if (xTaskCreatePinnedToCore(videoCaptureTask, "volc_video", 6144, nullptr, 3, nullptr, 1) != pdPASS) {
+    // 栈放 PSRAM（内部 SRAM 紧张，6KB 内部栈曾是禁用视觉桥的原因之一）；
+    // 绑 core 0：core 1 跑 AFE/采集，JPEG 软编码（单帧 ~100-300ms）放 core 0
+    // 的 IO 阻塞型任务堆里，prio 3 低于全部音频任务，不与拾音争抢。
+    if (xTaskCreatePinnedToCoreWithCaps(videoCaptureTask, "volc_video", 16384, nullptr, 3, nullptr, 0,
+                                        MALLOC_CAP_SPIRAM) != pdPASS) {
         _video_task_running.store(false);
         _video_task_started.store(false);
         mclog::tagError(_tag, "failed to create video task");
@@ -2086,8 +2109,11 @@ bool start()
     esp_wifi_set_ps(WIFI_PS_NONE);
     mclog::tagInfo(_tag, "wifi power save off for RTC session");
 
-    // 视频桥暂时禁用：摄像头的 mmap buffer (~150KB) + JPEG 编码会进一步压低内部 SRAM，
-    // 当前 AEC + AFE 已经把可用 SRAM 压到 5KB 以下，先把视频路径让给音频确保链路活下来。
+    // 视觉桥：低频 2s/帧，仅会话期取帧编码上传（任务内按 _conversation_active 门控）。
+    // 早期禁用的内存顾虑已解除：V4L2 mmap 缓冲是板级常驻（与本任务无关），帧副本/
+    // JPEG/任务栈全部走 PSRAM，对内部 SRAM 零增量；每帧日志可持续取证。
+    startVideoBridge();
+
     // 连接完成，进入"等待唤醒"视觉态（中性表情 + 待机灯色）。
     _led_tool_override.store(false);
     {
@@ -2122,7 +2148,8 @@ void stop()
     for (int i = 0; i < 750; ++i) {
         if (!_audio_task_started.load() && !_afe_fetch_started.load() &&
             !_uplink_task_started.load() && !_playback_task_started.load() &&
-            !_tool_task_started.load() && !_connect_task_started.load()) {
+            !_tool_task_started.load() && !_connect_task_started.load() &&
+            !_video_task_started.load()) {
             tasks_exited = true;
             break;
         }
@@ -2170,9 +2197,19 @@ bool isRunning()
 
 bool sendVideoJpeg(const uint8_t* data, size_t len)
 {
-    std::lock_guard<std::mutex> lock(_mutex);
-    if (!_running || !_engine || !data || len == 0) {
+    if (!data || len == 0) {
         return false;
+    }
+
+    // 视频帧较大（QVGA JPEG ~10-20KB），发送阻塞时间比音频帧更长：与音频发送同一
+    // 锁纪律（_send_mutex 跨发送、_mutex 短校验），绝不持 _mutex 跨网络发送。
+    // 仅会话建联后发送，待机期不上传视频。
+    std::lock_guard<std::mutex> send_lock(_send_mutex);
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (!_running || !_engine || !_conv_started.load()) {
+            return false;
+        }
     }
 
     volc_video_frame_info_t info = {};
