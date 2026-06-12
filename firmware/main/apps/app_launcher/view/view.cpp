@@ -299,7 +299,9 @@ LauncherView::~LauncherView()
     _icon_panels.clear();
     _lr_indicators_images.clear();
     _lr_indicator_panels.clear();
+    _app_background_image.reset();
     _panel.reset();
+    _app_names.clear();
     _dynamic_bg_color.reset();
     _page_indicator.reset();
     _dynamic_icon_label.reset();
@@ -324,11 +326,24 @@ void LauncherView::init(std::vector<mooncake::AppProps_t> appPorps)
     _panel->addFlag(LV_OBJ_FLAG_SCROLL_ONE);
     lv_obj_set_scroll_snap_x(_panel->get(), LV_SCROLL_SNAP_CENTER);
 
+    static auto vertc_background = assets::get_image("vertc_agent_bg.png");
+    _app_background_image = std::make_unique<Image>(_panel->get());
+    _app_background_image->setSrc(&vertc_background);
+    _app_background_image->align(LV_ALIGN_CENTER, 0, 0);
+    _app_background_image->addFlag(LV_OBJ_FLAG_FLOATING);
+    _app_background_image->removeFlag(LV_OBJ_FLAG_SCROLLABLE);
+    _app_background_image->setHidden(true);
+    _app_background_image->moveBackground();
+
     /* ---------------------------------- Icons --------------------------------- */
     int icon_x = 0;
     int icon_y = 0;
     std::vector<std::string> icon_label_texts;
     std::vector<uint32_t> step_colors;
+    _app_names.clear();
+    for (const auto& props : appPorps) {
+        _app_names.push_back(props.info.name);
+    }
 
     // Loop multiple times to create fake infinite scroll
     for (int loop = 0; loop < _loop_copies; loop++) {
@@ -575,6 +590,15 @@ void LauncherView::handle_state_normal()
 
     int scroll_x = _panel->getScrollX();
     // mclog::tagInfo(_tag, "scroll x: {}", scroll_x);
+
+    int current_icon_index = (scroll_x + _icon_gap / 2) / _icon_gap;
+    int current_app_index = current_icon_index % icons_per_set;
+    if (current_app_index < 0) {
+        current_app_index += icons_per_set;
+    }
+    if (_app_background_image && current_app_index < static_cast<int>(_app_names.size())) {
+        _app_background_image->setHidden(_app_names[current_app_index] != "VeRTC.Agent");
+    }
 
     _dynamic_bg_color->update(scroll_x);
     _page_indicator->update(scroll_x);

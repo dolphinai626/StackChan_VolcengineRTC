@@ -4,6 +4,14 @@
 > AI 工具之间**不直接通信**，所有协同通过仓库内工件同步：git 提交、WORKLOG.md、debug-*.md。
 > 任何 AI 会话开工前必须完整阅读本文件。
 
+## 0. 项目坐标与规则入口
+
+- 本地主工作目录：`/Users/bytedance/Documents/trae_projects/StackChan`
+- ClaudeWork 规则入口：`/Users/bytedance/ClaudeWork/Documents/trae_projects/StackChan/AGENTS.md`
+- 云端仓库：`https://github.com/dolphinai626/StackChan_VolcengineRTC`
+- 所有 AI coding 工具进入本项目后，先定位到本地主工作目录，完整阅读本文件，再执行下面的会话开工三步。
+- ClaudeWork、Trae、Cursor 等工具的专属规则文件只做指针；实际协作规则以本文件为准，避免多份规则漂移。
+
 ## 1. 会话开工三步（必做，跳过任何一步都可能毁掉别人的工作）
 
 1. 读 [WORKLOG.md](WORKLOG.md) 最新条目 + `git log --oneline -5` + `git status`

@@ -12,6 +12,7 @@
 #include <functional>
 #include <vector>
 #include <memory>
+#include <string>
 
 namespace view {
 
@@ -35,10 +36,12 @@ public:
 
 private:
     std::unique_ptr<uitk::lvgl_cpp::Container> _panel;
+    std::unique_ptr<uitk::lvgl_cpp::Image> _app_background_image;
     std::vector<std::unique_ptr<uitk::lvgl_cpp::Container>> _icon_panels;
     std::vector<std::unique_ptr<uitk::lvgl_cpp::Image>> _icon_images;
     std::vector<std::unique_ptr<uitk::lvgl_cpp::Container>> _lr_indicator_panels;
     std::vector<std::unique_ptr<uitk::lvgl_cpp::Image>> _lr_indicators_images;
+    std::vector<std::string> _app_names;
 
     std::unique_ptr<uitk::AnimateVector2> _startup_anim;
 

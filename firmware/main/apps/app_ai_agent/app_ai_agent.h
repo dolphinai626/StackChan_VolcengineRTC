@@ -4,11 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 #pragma once
-#include <apps/app_setup/view/view.h>
 #include <mooncake.h>
 #include <cstdint>
-#include <memory>
-#include <vector>
 
 /**
  * @brief Derived App
@@ -16,7 +13,12 @@
  */
 class AppAiAgent : public mooncake::AppAbility {
 public:
-    AppAiAgent();
+    enum class LaunchMode {
+        StackChan,
+        Volcengine,
+    };
+
+    explicit AppAiAgent(LaunchMode mode = LaunchMode::StackChan);
 
     // Override lifecycle callbacks
     void onCreate() override;
@@ -31,8 +33,7 @@ private:
         Volcengine,
     };
 
-    std::vector<view::SelectMenuPage::MenuSection> _menu_sections;
-    std::unique_ptr<view::SelectMenuPage> _menu_page;
+    LaunchMode _mode;
     Backend _active_backend        = Backend::None;
     Backend _pending_backend       = Backend::None;
     bool _volc_started             = false;

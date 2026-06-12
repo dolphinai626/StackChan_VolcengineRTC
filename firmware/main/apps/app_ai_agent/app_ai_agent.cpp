@@ -21,16 +21,21 @@
 using namespace mooncake;
 using namespace smooth_ui_toolkit::lvgl_cpp;
 
-AppAiAgent::AppAiAgent()
+AppAiAgent::AppAiAgent(LaunchMode mode) : _mode(mode)
 {
-    // Configure App name
-    setAppInfo().name = "AI.AGENT";
-    // Configure App icon
-    static auto icon  = assets::get_image("icon_ai_agent.bin");
-    setAppInfo().icon = (void*)&icon;
-    // Configure App theme color
-    static uint32_t theme_color = 0x33CC99;
-    setAppInfo().userData       = (void*)&theme_color;
+    static auto ai_icon = assets::get_image("icon_ai_agent.bin");
+    static uint32_t ai_theme_color = 0x33CC99;
+    static uint32_t vertc_theme_color = 0x246BFE;
+
+    if (_mode == LaunchMode::StackChan) {
+        setAppInfo().name = "AI.Agent";
+        setAppInfo().icon = (void*)&ai_icon;
+        setAppInfo().userData = (void*)&ai_theme_color;
+    } else {
+        setAppInfo().name = "VeRTC.Agent";
+        setAppInfo().icon = (void*)&ai_icon;
+        setAppInfo().userData = (void*)&vertc_theme_color;
+    }
 }
 
 // Called when the App is installed
@@ -50,28 +55,9 @@ void AppAiAgent::onOpen()
     _volc_started = false;
     _volc_starting = false;
     _volc_start_failed = false;
+    _volc_attempted = false;
     _launch_xiaozhi_on_close = false;
-
-    _menu_sections = {{
-        "AI.Agent",
-        {
-            {"StackChan",
-             [&]() {
-                 mclog::tagInfo(getAppInfo().name, "StackChan selected");
-                 _pending_backend = Backend::Xiaozhi;
-             }},
-            {"Volcengine",
-             [&]() {
-                 mclog::tagInfo(getAppInfo().name, "Volcengine selected");
-                 _pending_backend = Backend::Volcengine;
-             }},
-        },
-    }};
-
-    LvglLockGuard lock;
-    _menu_page = std::make_unique<view::SelectMenuPage>(_menu_sections);
-    view::create_home_indicator([&]() { close(); });
-    view::create_status_bar();
+    _pending_backend = (_mode == LaunchMode::StackChan) ? Backend::Xiaozhi : Backend::Volcengine;
 }
 
 // Called repeatedly while the App is running
@@ -82,21 +68,13 @@ void AppAiAgent::onRunning()
     {
         LvglLockGuard lock;
 
-        if (_menu_page) {
-            _menu_page->update();
-        }
-
         pending_backend = _pending_backend;
         _pending_backend = Backend::None;
-        if (pending_backend != Backend::None) {
-            _menu_page.reset();
-        }
 
         if (_volc_start_failed) {
             _volc_start_failed = false;
             _active_backend = Backend::None;
-            _menu_page = std::make_unique<view::SelectMenuPage>(_menu_sections);
-            view::create_home_indicator([&]() { close(); });
+            close();
         }
 
         GetStackChan().update();
@@ -141,7 +119,6 @@ void AppAiAgent::onClose()
 
     {
         LvglLockGuard lock;
-        _menu_page.reset();
         view::destroy_home_indicator();
     }
 

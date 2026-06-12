@@ -7,8 +7,10 @@
 
 - 占用域：firmware-ui + firmware-audio + docs-cloud
 - 计划：更新协作规则；把首页入口拆成原生 StackChan AI.Agent 与 Volc VeRTC.Agent；验证后合回 main 并删除临时分支
-- 结果：进行中
-- 遗留：待验证
+- 结果：已拆成首页两个入口；AI.Agent 只请求原生 StackChan/Xiaozhi 链路，VeRTC.Agent 只启动 Volc 链路；
+  新增 VeRTC 首页背景图；已更新 AGENTS.md / Trae 规则指针；idf.py build 与实机 flash 通过，
+  串口验证 VeRTC listening、tool call、tool result、bot 音频链路正常
+- 遗留：AI.Agent 原生链路本次保留原请求路径并通过编译验证，未在串口中单独打开回归
 
 ## 2026-06-12 [claude] volcRTC 本地工具调用（RTS 协议）+ 字幕显示调用过程 + 唤醒前声源定位对齐
 
