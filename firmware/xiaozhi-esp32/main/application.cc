@@ -433,10 +433,8 @@ void Application::CheckNewVersion() {
         retry_delay = 10; // Reset retry delay
 
         if (ota_->HasNewVersion()) {
-            if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {
-                return; // This line will never be reached after reboot
-            }
-            // If upgrade failed, continue to normal operation
+            ESP_LOGW(TAG, "Firmware update %s is available, but device OTA is disabled; update this fork by pulling upstream and copying changes manually",
+                     ota_->GetFirmwareVersion().c_str());
         }
 
         // No new version, mark the current version as valid
@@ -965,58 +963,6 @@ void Application::Reboot() {
 
     vTaskDelay(pdMS_TO_TICKS(1000));
     esp_restart();
-}
-
-bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
-    auto& board = Board::GetInstance();
-    auto display = board.GetDisplay();
-
-    std::string upgrade_url = url;
-    std::string version_info = version.empty() ? "(Manual upgrade)" : version;
-
-    // Close audio channel if it's open
-    if (protocol_ && protocol_->IsAudioChannelOpened()) {
-        ESP_LOGI(TAG, "Closing audio channel before firmware upgrade");
-        protocol_->CloseAudioChannel();
-    }
-    ESP_LOGI(TAG, "Starting firmware upgrade from URL: %s", upgrade_url.c_str());
-
-    Alert(Lang::Strings::OTA_UPGRADE, Lang::Strings::UPGRADING, "download", Lang::Sounds::OGG_UPGRADE);
-    vTaskDelay(pdMS_TO_TICKS(3000));
-
-    SetDeviceState(kDeviceStateUpgrading);
-
-    std::string message = std::string(Lang::Strings::NEW_VERSION) + version_info;
-    display->SetChatMessage("system", message.c_str());
-
-    board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
-    audio_service_.Stop();
-    vTaskDelay(pdMS_TO_TICKS(1000));
-
-    bool upgrade_success = Ota::Upgrade(upgrade_url, [this, display](int progress, size_t speed) {
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, speed / 1024);
-        Schedule([display, message = std::string(buffer)]() {
-            display->SetChatMessage("system", message.c_str());
-        });
-    });
-
-    if (!upgrade_success) {
-        // Upgrade failed, restart audio service and continue running
-        ESP_LOGE(TAG, "Firmware upgrade failed, restarting audio service and continuing operation...");
-        audio_service_.Start(); // Restart audio service
-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER); // Restore power save level
-        Alert(Lang::Strings::ERROR, Lang::Strings::UPGRADE_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
-        vTaskDelay(pdMS_TO_TICKS(3000));
-        return false;
-    } else {
-        // Upgrade success, reboot immediately
-        ESP_LOGI(TAG, "Firmware upgrade successful, rebooting...");
-        display->SetChatMessage("system", "Upgrade successful, rebooting...");
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Brief pause to show message
-        Reboot();
-        return true;
-    }
 }
 
 void Application::WakeWordInvoke(const std::string& wake_word) {

@@ -1,8 +1,21 @@
 diff --git a/main/application.cc b/main/application.cc
-index d69d43d..3b6f07e 100644
+index d69d43d..25a6edc 100644
 --- a/main/application.cc
 +++ b/main/application.cc
-@@ -610,33 +610,36 @@ void Application::InitializeProtocol() {
+@@ -433,10 +433,8 @@ void Application::CheckNewVersion() {
+         retry_delay = 10; // Reset retry delay
+ 
+         if (ota_->HasNewVersion()) {
+-            if (UpgradeFirmware(ota_->GetFirmwareUrl(), ota_->GetFirmwareVersion())) {
+-                return; // This line will never be reached after reboot
+-            }
+-            // If upgrade failed, continue to normal operation
++            ESP_LOGW(TAG, "Firmware update %s is available, but device OTA is disabled; update this fork by pulling upstream and copying changes manually",
++                     ota_->GetFirmwareVersion().c_str());
+         }
+ 
+         // No new version, mark the current version as valid
+@@ -610,33 +608,36 @@ void Application::InitializeProtocol() {
  }
  
  void Application::ShowActivationCode(const std::string& code, const std::string& message) {
@@ -39,7 +52,7 @@ index d69d43d..3b6f07e 100644
 +    // };
 +    // static const std::array<digit_sound, 10> digit_sounds{{
 +    //     digit_sound{'0', Lang::Sounds::OGG_0},
-+    //     digit_sound{'1', Lang::Sounds::OGG_1}, 
++    //     digit_sound{'1', Lang::Sounds::OGG_1},
 +    //     digit_sound{'2', Lang::Sounds::OGG_2},
 +    //     digit_sound{'3', Lang::Sounds::OGG_3},
 +    //     digit_sound{'4', Lang::Sounds::OGG_4},
@@ -66,6 +79,82 @@ index d69d43d..3b6f07e 100644
  }
  
  void Application::Alert(const char* status, const char* message, const char* emotion, const std::string_view& sound) {
+@@ -964,58 +965,6 @@ void Application::Reboot() {
+     esp_restart();
+ }
+ 
+-bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
+-    auto& board = Board::GetInstance();
+-    auto display = board.GetDisplay();
+-
+-    std::string upgrade_url = url;
+-    std::string version_info = version.empty() ? "(Manual upgrade)" : version;
+-
+-    // Close audio channel if it's open
+-    if (protocol_ && protocol_->IsAudioChannelOpened()) {
+-        ESP_LOGI(TAG, "Closing audio channel before firmware upgrade");
+-        protocol_->CloseAudioChannel();
+-    }
+-    ESP_LOGI(TAG, "Starting firmware upgrade from URL: %s", upgrade_url.c_str());
+-
+-    Alert(Lang::Strings::OTA_UPGRADE, Lang::Strings::UPGRADING, "download", Lang::Sounds::OGG_UPGRADE);
+-    vTaskDelay(pdMS_TO_TICKS(3000));
+-
+-    SetDeviceState(kDeviceStateUpgrading);
+-
+-    std::string message = std::string(Lang::Strings::NEW_VERSION) + version_info;
+-    display->SetChatMessage("system", message.c_str());
+-
+-    board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+-    audio_service_.Stop();
+-    vTaskDelay(pdMS_TO_TICKS(1000));
+-
+-    bool upgrade_success = Ota::Upgrade(upgrade_url, [this, display](int progress, size_t speed) {
+-        char buffer[32];
+-        snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, speed / 1024);
+-        Schedule([display, message = std::string(buffer)]() {
+-            display->SetChatMessage("system", message.c_str());
+-        });
+-    });
+-
+-    if (!upgrade_success) {
+-        // Upgrade failed, restart audio service and continue running
+-        ESP_LOGE(TAG, "Firmware upgrade failed, restarting audio service and continuing operation...");
+-        audio_service_.Start(); // Restart audio service
+-        board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER); // Restore power save level
+-        Alert(Lang::Strings::ERROR, Lang::Strings::UPGRADE_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+-        vTaskDelay(pdMS_TO_TICKS(3000));
+-        return false;
+-    } else {
+-        // Upgrade success, reboot immediately
+-        ESP_LOGI(TAG, "Firmware upgrade successful, rebooting...");
+-        display->SetChatMessage("system", "Upgrade successful, rebooting...");
+-        vTaskDelay(pdMS_TO_TICKS(1000)); // Brief pause to show message
+-        Reboot();
+-        return true;
+-    }
+-}
+-
+ void Application::WakeWordInvoke(const std::string& wake_word) {
+     if (!protocol_) {
+         return;
+@@ -1116,4 +1065,3 @@ void Application::ResetProtocol() {
+         protocol_.reset();
+     });
+ }
+-
+diff --git a/main/application.h b/main/application.h
+index 7ca7af4..cc0ab4d 100644
+--- a/main/application.h
++++ b/main/application.h
+@@ -105,7 +105,6 @@ public:
+ 
+     void Reboot();
+     void WakeWordInvoke(const std::string& wake_word);
+-    bool UpgradeFirmware(const std::string& url, const std::string& version = "");
+     bool CanEnterSleepMode();
+     void SendMcpMessage(const std::string& payload);
+     void SetAecMode(AecMode mode);
 diff --git a/main/assets.cc b/main/assets.cc
 index ad61944..6b84daf 100644
 --- a/main/assets.cc
@@ -245,14 +334,88 @@ index 3692e0c..7bfbc5c 100644
      
      // Strategy instance
      std::unique_ptr<AssetStrategy> strategy_;
+diff --git a/main/audio/wake_words/afe_wake_word.cc b/main/audio/wake_words/afe_wake_word.cc
+index 8fc5fef..36257bd 100644
+--- a/main/audio/wake_words/afe_wake_word.cc
++++ b/main/audio/wake_words/afe_wake_word.cc
+@@ -79,12 +79,29 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
+     
+     afe_iface_ = esp_afe_handle_from_config(afe_config);
+     afe_data_ = afe_iface_->create_from_config(afe_config);
++    if (afe_data_ == nullptr) {
++        ESP_LOGE(TAG, "Failed to create AFE data");
++        return false;
++    }
+ 
+-    xTaskCreate([](void* arg) {
++    // The audio detection task stack must live in PSRAM: by the time wake word
++    // detection is enabled (entering idle after activation) internal SRAM is
++    // heavily fragmented and a normal xTaskCreate would fail to allocate the
++    // stack, leaving nobody to fetch() from AFE (ringbuffer full, no wake-up).
++    const size_t stack_size = 4096;
++    if (audio_detection_task_stack_ == nullptr) {
++        audio_detection_task_stack_ = (StackType_t*)heap_caps_malloc(stack_size, MALLOC_CAP_SPIRAM);
++        assert(audio_detection_task_stack_ != nullptr);
++    }
++    if (audio_detection_task_buffer_ == nullptr) {
++        audio_detection_task_buffer_ = (StaticTask_t*)heap_caps_malloc(sizeof(StaticTask_t), MALLOC_CAP_INTERNAL);
++        assert(audio_detection_task_buffer_ != nullptr);
++    }
++    xTaskCreateStatic([](void* arg) {
+         auto this_ = (AfeWakeWord*)arg;
+         this_->AudioDetectionTask();
+         vTaskDelete(NULL);
+-    }, "audio_detection", 4096, this, 3, nullptr);
++    }, "audio_detection", stack_size, this, 3, audio_detection_task_stack_, audio_detection_task_buffer_);
+ 
+     return true;
+ }
+diff --git a/main/audio/wake_words/afe_wake_word.h b/main/audio/wake_words/afe_wake_word.h
+index 6c2bf72..88024c0 100644
+--- a/main/audio/wake_words/afe_wake_word.h
++++ b/main/audio/wake_words/afe_wake_word.h
+@@ -50,6 +50,8 @@ private:
+     TaskHandle_t wake_word_encode_task_ = nullptr;
+     StaticTask_t* wake_word_encode_task_buffer_ = nullptr;
+     StackType_t* wake_word_encode_task_stack_ = nullptr;
++    StaticTask_t* audio_detection_task_buffer_ = nullptr;
++    StackType_t* audio_detection_task_stack_ = nullptr;
+     std::deque<std::vector<int16_t>> wake_word_pcm_;
+     std::deque<std::vector<uint8_t>> wake_word_opus_;
+     std::mutex wake_word_mutex_;
 diff --git a/main/boards/common/i2c_device.cc b/main/boards/common/i2c_device.cc
-index 835997d..ea50d51 100644
+index 835997d..32f1c66 100644
 --- a/main/boards/common/i2c_device.cc
 +++ b/main/boards/common/i2c_device.cc
-@@ -32,4 +32,8 @@ uint8_t I2cDevice::ReadReg(uint8_t reg) {
+@@ -21,15 +21,29 @@ I2cDevice::I2cDevice(i2c_master_bus_handle_t i2c_bus, uint8_t addr) {
+ 
+ void I2cDevice::WriteReg(uint8_t reg, uint8_t value) {
+     uint8_t buffer[2] = {reg, value};
+-    ESP_ERROR_CHECK(i2c_master_transmit(i2c_device_, buffer, 2, 100));
++    esp_err_t err = i2c_master_transmit(i2c_device_, buffer, 2, 100);
++    if (err != ESP_OK) {
++        ESP_LOGW(TAG, "WriteReg(0x%02x)=0x%02x failed: %s", reg, value, esp_err_to_name(err));
++    }
+ }
+ 
+ uint8_t I2cDevice::ReadReg(uint8_t reg) {
+-    uint8_t buffer[1];
+-    ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, 1, 100));
++    uint8_t buffer[1] = {0xFF};
++    esp_err_t err = i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, 1, 100);
++    if (err != ESP_OK) {
++        ESP_LOGW(TAG, "ReadReg(0x%02x) failed: %s", reg, esp_err_to_name(err));
++        return 0xFF;
++    }
+     return buffer[0];
+ }
  
  void I2cDevice::ReadRegs(uint8_t reg, uint8_t* buffer, size_t length) {
-     ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, length, 100));
+-    ESP_ERROR_CHECK(i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, length, 100));
++    esp_err_t err = i2c_master_transmit_receive(i2c_device_, &reg, 1, buffer, length, 100);
++    if (err != ESP_OK) {
++        ESP_LOGW(TAG, "ReadRegs(0x%02x, len=%u) failed: %s", reg, (unsigned)length, esp_err_to_name(err));
++    }
 +}
 +
 +esp_err_t I2cDevice::TryReadRegs(uint8_t reg, uint8_t* buffer, size_t length, int timeout_ms) {
@@ -271,3 +434,34 @@ index 7bc917b..874b137 100644
  };
  
  #endif // I2C_DEVICE_H
+diff --git a/main/mcp_server.cc b/main/mcp_server.cc
+index 7cd7ba0..fd8d925 100644
+--- a/main/mcp_server.cc
++++ b/main/mcp_server.cc
+@@ -148,26 +148,6 @@ void McpServer::AddUserOnlyTools() {
+             return true;
+         });
+ 
+-    // Firmware upgrade
+-    AddUserOnlyTool("self.upgrade_firmware", "Upgrade firmware from a specific URL. This will download and install the firmware, then reboot the device.",
+-        PropertyList({
+-            Property("url", kPropertyTypeString, "The URL of the firmware binary file to download and install")
+-        }),
+-        [this](const PropertyList& properties) -> ReturnValue {
+-            auto url = properties["url"].value<std::string>();
+-            ESP_LOGI(TAG, "User requested firmware upgrade from URL: %s", url.c_str());
+-            
+-            auto& app = Application::GetInstance();
+-            app.Schedule([url, &app]() {
+-                bool success = app.UpgradeFirmware(url);
+-                if (!success) {
+-                    ESP_LOGE(TAG, "Firmware upgrade failed");
+-                }
+-            });
+-            
+-            return true;
+-        });
+-
+     // Display control
+ #ifdef HAVE_LVGL
+     auto display = dynamic_cast<LvglDisplay*>(Board::GetInstance().GetDisplay());

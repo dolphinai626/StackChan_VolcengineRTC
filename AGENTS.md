@@ -93,3 +93,5 @@ idf.py -p /dev/cu.usbmodem2101 build flash    # 烧录（仅持机会话）
   唤醒/字幕/音视频状态机，除非任务明确要求且同时完成 Volcengine 回归验证。
 - StackChan/Xiaozhi 原生升级信息必须同步到 `WORKLOG.md`：记录上游版本/来源、触碰文件域、
   是否改 `firmware/xiaozhi-esp32/` vendored 代码、是否更新 patch、AI.Agent 验证结果、VeRTC.Agent 回归结果。
+- 设备侧固件 OTA 已禁用：`AI.Agent` / Xiaozhi 只能检查并提示新版本，不得自动下载写入 OTA 分区；
+  同步 StackChan 开源更新必须在代码层手动拉取、比对、拷贝/移植、编译、烧录，避免整包 OTA 覆盖 `VeRTC.Agent` 链路。

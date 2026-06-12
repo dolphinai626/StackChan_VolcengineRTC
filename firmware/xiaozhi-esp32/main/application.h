@@ -105,7 +105,6 @@ public:
 
     void Reboot();
     void WakeWordInvoke(const std::string& wake_word);
-    bool UpgradeFirmware(const std::string& url, const std::string& version = "");
     bool CanEnterSleepMode();
     void SendMcpMessage(const std::string& payload);
     void SetAecMode(AecMode mode);
