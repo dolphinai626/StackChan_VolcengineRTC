@@ -3,6 +3,13 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [codex] 调整首页入口顺序：VeRTC.Agent 在 AI.Agent 前
+
+- 占用域：firmware-ui
+- 计划：调整 App 安装顺序，让首页第一个业务入口为 VeRTC.Agent，AI.Agent 排在后面
+- 结果：已调整 main.cpp 安装顺序；Launcher 会移除自身并保留业务 App 安装顺序，因此首页第一个业务入口为 VeRTC.Agent，AI.Agent 排在后面；idf.py build 通过
+- 遗留：未烧录做屏幕目视确认
+
 ## 2026-06-12 [codex] 首页拆分 AI.Agent / VeRTC.Agent + 多 AI 项目规则补充
 
 - 占用域：firmware-ui + firmware-audio + docs-cloud
