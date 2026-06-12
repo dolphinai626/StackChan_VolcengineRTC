@@ -3,6 +3,15 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [codex] 同步 StackChan 原生升级隔离规则并重新烧录
+
+- 占用域：docs-cloud
+- 计划：在项目规则中补充 StackChan 原生链路升级不得影响 VeRTC/Volcengine 链路，并重新烧录当前固件
+- 结果：已在 AGENTS.md 补充 StackChan/Xiaozhi 原生升级隔离规则和升级信息同步要求；
+  `idf.py -p /dev/cu.usbmodem2101 build flash` 通过，应用与 assets 分区写入校验成功并硬复位；
+  复位后串口有 SystemInfo 正常运行输出
+- 遗留：未做 AI.Agent / VeRTC.Agent 交互回归，本次只同步规则并重新烧录当前固件
+
 ## 2026-06-12 [codex] 调整首页入口顺序：VeRTC.Agent 在 AI.Agent 前
 
 - 占用域：firmware-ui

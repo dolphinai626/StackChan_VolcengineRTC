@@ -88,3 +88,8 @@ idf.py -p /dev/cu.usbmodem2101 build flash    # 烧录（仅持机会话）
 - volc SDK 上游有两个生命周期 bug，由 `patches/volc_conv_ai.patch` 修复，
   已提上游 PR volcengine/ConversationalAI-Embedded-Kit-2.0#5
 - CoreS3 无硬件回采参考，AEC 不可用，半双工门控是当前设计约束
+- 首页入口已拆分：`VeRTC.Agent` 走 Volcengine 链路，`AI.Agent` 走 StackChan/Xiaozhi 原生链路。
+  升级 StackChan 原生链路时，不得改动或回退 Volcengine 运行路径、RTC RTP 参数、工具调用链路、
+  唤醒/字幕/音视频状态机，除非任务明确要求且同时完成 Volcengine 回归验证。
+- StackChan/Xiaozhi 原生升级信息必须同步到 `WORKLOG.md`：记录上游版本/来源、触碰文件域、
+  是否改 `firmware/xiaozhi-esp32/` vendored 代码、是否更新 patch、AI.Agent 验证结果、VeRTC.Agent 回归结果。
