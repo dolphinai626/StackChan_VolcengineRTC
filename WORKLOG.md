@@ -11,8 +11,9 @@
 - 结果：已定位并修复两处原生链路问题：Xiaozhi 下行 Opus 单包多帧只解首帧导致播放断续；
   WiFi 已由 VeRTC/HAL 连上后，AI.Agent 重新注册 Xiaozhi 网络回调却收不到 Connected 事件，导致卡在网络流程；
   已同步更新 `firmware/patches/xiaozhi-esp32.patch`，`git diff --check`、patch apply check、`idf.py build`、
-  `idf.py -p /dev/cu.usbmodem2101 build flash` 均通过，串口复位启动正常
-- 遗留：未做屏幕交互实测 `VeRTC.Agent -> 返回首页 -> AI.Agent` 和原生下行播放连续性，需要人工点选确认
+  `idf.py -p /dev/cu.usbmodem2101 build flash` 均通过，串口复位启动正常；用户已实测 `VeRTC.Agent -> 返回首页 -> AI.Agent`
+  和原生下行播放连续性通过
+- 遗留：无
 
 ## 2026-06-12 [claude] VeRTC 视觉采集 + 工具执行层实测修复（音量崩溃两层根因）
 

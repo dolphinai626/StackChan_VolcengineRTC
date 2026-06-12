@@ -1,6 +1,6 @@
 # debug-stackchan-playback-network
 
-Status: [PARTIAL VERIFIED]
+Status: [RESOLVED]
 
 ## Symptoms
 
@@ -32,4 +32,4 @@ Status: [PARTIAL VERIFIED]
 - `idf.py build` 通过，生成 `build/stackchan-volc-open.bin`。
 - `idf.py -p /dev/cu.usbmodem2101 build flash` 通过，应用与 assets 分区写入校验成功并 hard reset。
 - 串口 monitor 复位后启动正常：Launcher 打开，并创建 `VeRTC.Agent`、`AI.Agent`、`AVATAR` 等首页入口；未见启动阶段崩溃或网络配置卡死。
-- 未完成屏幕交互实测：仍需人工点选验证 `VeRTC.Agent -> 返回首页 -> AI.Agent`，以及 StackChan/Xiaozhi 下行播放连续性。
+- 用户实测通过：`VeRTC.Agent -> 返回首页 -> AI.Agent` 重入正常，StackChan/Xiaozhi 下行播放连续性恢复。
