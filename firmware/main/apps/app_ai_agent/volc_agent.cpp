@@ -1682,8 +1682,23 @@ void handleToolMessage(volc_engine_t engine, cJSON* root)
             continue;
         }
 
-        mclog::tagInfo(_tag, "tool call: {}", tool_name);
-        sendToolResult(engine, call_id, dispatchTool(tool_name, args_json));
+        mclog::tagInfo(_tag, "tool call: {} args={}", tool_name, args_json ? args_json : "{}");
+
+        // 字幕显示调用过程：执行前提示、执行后报结果。短名去掉 self.robot. 前缀。
+        // 注意只用全字体确定包含的字符（[工具] 等常用字），勿用 ⚙ 等特殊符号
+        // （字体缺字形会静默不渲染）。
+        const char* short_name =
+            std::strncmp(tool_name, "self.robot.", 11) == 0 ? tool_name + 11 : tool_name;
+        Board::GetInstance().GetDisplay()->SetChatMessage(
+            "system", fmt::format("[工具] {} 执行中", short_name).c_str());
+
+        const std::string tool_result = dispatchTool(tool_name, args_json);
+        mclog::tagInfo(_tag, "tool result: {}", tool_result);
+        sendToolResult(engine, call_id, tool_result);
+
+        const bool ok = tool_result.find("\"error\"") == std::string::npos;
+        Board::GetInstance().GetDisplay()->SetChatMessage(
+            "system", fmt::format("[工具] {} {}", short_name, ok ? "完成" : "失败").c_str());
     }
 }
 
@@ -1786,7 +1801,8 @@ void onMessageData(volc_engine_t, const void* data, size_t len, volc_message_inf
     }
 
     const char* text = static_cast<const char*>(data);
-    if (len > 8 && (std::memcmp(text, "tool", 4) == 0 || std::memcmp(text, "subv", 4) == 0)) {
+    if (len > 8 && (std::memcmp(text, "tool", 4) == 0 || std::memcmp(text, "subv", 4) == 0 ||
+                    std::memcmp(text, "info", 4) == 0)) {
         const size_t payload_len =
             (static_cast<size_t>(static_cast<uint8_t>(text[4])) << 24) |
             (static_cast<size_t>(static_cast<uint8_t>(text[5])) << 16) |
@@ -1812,6 +1828,26 @@ void onMessageData(volc_engine_t, const void* data, size_t len, volc_message_inf
                 _tool_queue.pop_front();
             }
             _tool_queue.emplace_back(std::move(payload));
+            return;
+        }
+
+        if (std::memcmp(text, "info", 4) == 0) {
+            // 官方协议的 function_calling 触发事件（function_call_service.c）：
+            // {"event_type":"function_calling","function":"...","tool_call_id":"..."}。
+            // 它先于 tool 消息到达，用作字幕上最早的"调用中"提示。
+            cJSON* root = cJSON_ParseWithLength(payload.data(), payload.size());
+            if (root) {
+                const char* ev = jsonString(root, "event_type", "");
+                const char* fn = jsonString(root, "function", "");
+                if (std::strcmp(ev, "function_calling") == 0 && fn[0]) {
+                    const char* short_name =
+                        std::strncmp(fn, "self.robot.", 11) == 0 ? fn + 11 : fn;
+                    mclog::tagInfo(_tag, "function_calling triggered: {}", fn);
+                    Board::GetInstance().GetDisplay()->SetChatMessage(
+                        "system", fmt::format("[工具] {} 调用中", short_name).c_str());
+                }
+                cJSON_Delete(root);
+            }
             return;
         }
 

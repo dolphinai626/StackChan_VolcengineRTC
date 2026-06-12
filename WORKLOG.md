@@ -3,6 +3,19 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [claude] volcRTC 本地工具调用（RTS 协议）+ 字幕显示调用过程 + 唤醒前声源定位对齐
+
+- 占用域：firmware-audio（volc_agent.cpp）+ docs-cloud（服务端 tools 配置梳理）
+- 结果：
+  - volc RTS 工具协议对照官方 function_call_service 逐字段核验一致（tool 下发/func 回包），新增 info magic（function_calling 触发事件）处理
+  - 工具调用过程三阶段上字幕：[工具] xxx 调用中/执行中/完成（volc + xiaozhi 两侧一致）
+  - xiaozhi MCP 补齐 shake_head（参数较 volc 保守，回调跑在主循环）；音量用 xiaozhi 内建工具
+  - 唤醒前声源定位核对确认 volc 已具备（待机 DOA + 唤醒转头），无需新增
+  - 新增 docs/CLOUD_TOOLS_CONFIG.md：9 工具 schema + FunctionCallingConfig 投递配置 + 验证清单
+  - 编译烧录通过，启动日志确认 shake_head 注册成功
+- 遗留：等用户配置云端 FunctionCallingConfig（客户端投递）+ 9 工具 schema 后联调；
+  验证清单见 docs/CLOUD_TOOLS_CONFIG.md §5
+
 ## 2026-06-12 [claude] 建立多 AI 协作机制
 
 - 占用域：docs-cloud
