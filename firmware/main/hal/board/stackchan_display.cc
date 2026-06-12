@@ -240,6 +240,14 @@ lv_disp_t* StackChanAvatarDisplay::GetLvglDisplay()
 // 经 assets.Apply() 装载进主题，火山链路不走该路径，这里直接读出供气泡使用。
 static const lv_font_t* LoadAssetsTextFont()
 {
+    // 缓存：字体对象常驻（多个 label 持续引用），只加载一次。
+    static const lv_font_t* _cached_font = nullptr;
+    static bool _load_attempted          = false;
+    if (_load_attempted) {
+        return _cached_font;
+    }
+    _load_attempted = true;
+
     auto& assets = Assets::GetInstance();
     if (!assets.partition_valid()) {
         return nullptr;
@@ -255,26 +263,35 @@ static const lv_font_t* LoadAssetsTextFont()
         return nullptr;
     }
 
-    const lv_font_t* result = nullptr;
-    cJSON* font             = cJSON_GetObjectItem(root, "text_font");
+    cJSON* font = cJSON_GetObjectItem(root, "text_font");
     if (cJSON_IsString(font)) {
         void* ptr   = nullptr;
         size_t size = 0;
         if (assets.GetAssetData(font->valuestring, ptr, size)) {
-            // 字体对象需常驻（label 持续引用），用 static 持有生命周期。
             static std::shared_ptr<LvglCBinFont> _assets_text_font;
             _assets_text_font = std::make_shared<LvglCBinFont>(ptr);
             if (_assets_text_font->font()) {
-                result = _assets_text_font->font();
-                ESP_LOGI(TAG, "speech bubble font: assets %s", font->valuestring);
+                _cached_font = _assets_text_font->font();
+                ESP_LOGI(TAG, "assets CJK text font loaded: %s", font->valuestring);
             }
         } else {
             ESP_LOGW(TAG, "assets text font %s not found, fallback to builtin", font->valuestring);
         }
     }
     cJSON_Delete(root);
-    return result;
+    return _cached_font;
 }
+
+// 供 UI 组件取完整中文字体（ReminderView 等）。lv_font_montserrat_* 是纯拉丁
+// 字体，中文文本零字形会被 LVGL 静默跳过（提醒贴纸"标签无内容"的根因）；
+// assets 字体不可用时回落 ~800 字的内置 basic 字体。
+namespace view {
+const lv_font_t* cjk_text_font()
+{
+    auto font = LoadAssetsTextFont();
+    return font ? font : &BUILTIN_TEXT_FONT;
+}
+}  // namespace view
 
 void StackChanAvatarDisplay::SetupUI()
 {

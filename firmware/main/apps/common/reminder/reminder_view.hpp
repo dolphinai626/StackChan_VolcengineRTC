@@ -16,6 +16,9 @@
 
 namespace view {
 
+// 完整中文字体（实现在 stackchan_display.cc，assets 不可用时回落内置字体）。
+const lv_font_t* cjk_text_font();
+
 class ReminderView : public stackchan::avatar::Decorator {
 public:
     ReminderView(lv_obj_t* parent, std::string_view message)
@@ -52,7 +55,9 @@ public:
         _msg->setText(message);
         _msg->setWidth(256);
         _msg->setTextAlign(LV_TEXT_ALIGN_CENTER);
-        _msg->setTextFont(&lv_font_montserrat_24);
+        // 提醒内容多为中文：montserrat 是纯拉丁字体，中文字形缺失会被 LVGL
+        // 静默跳过（标签看似空白），必须用含 CJK 的完整字体。
+        _msg->setTextFont(cjk_text_font());
         _msg->setTextColor(lv_color_hex(0x47330A));
 
         _btn_ok = std::make_unique<uitk::lvgl_cpp::Button>(_panel->get());

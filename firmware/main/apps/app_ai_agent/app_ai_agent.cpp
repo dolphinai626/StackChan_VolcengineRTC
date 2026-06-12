@@ -58,11 +58,55 @@ void AppAiAgent::onOpen()
     _volc_attempted = false;
     _launch_xiaozhi_on_close = false;
     _pending_backend = (_mode == LaunchMode::StackChan) ? Backend::Xiaozhi : Backend::Volcengine;
+
+    if (_mode == LaunchMode::Volcengine) {
+        // 提醒触发处理器（与 xiaozhi 链路 Hal::startXiaozhi 的弹窗逻辑对齐）：
+        // 视觉弹窗同款 ReminderView；播报不用 xiaozhi 的 app_play_sound（volc 模式
+        // 下 xiaozhi Application 未初始化），改为 ExternalTextToTTS 直接播报；
+        // 待机未建联时弹窗 + 摇头提醒。
+        tools::on_reminder_triggered().clear();
+        tools::on_reminder_triggered().connect([](int id, std::string_view msg) {
+            mclog::tagInfo("VeRTC.Agent", "reminder triggered: id: {}, msg: {}", id, msg);
+            {
+                LvglLockGuard lock;
+                auto& avatar = GetStackChan().avatar();
+                avatar.addDecorator(std::make_unique<view::ReminderView>(lv_screen_active(), msg));
+            }
+            if (!volc_agent::notifyReminder(msg)) {
+                // 待机无会话：摇头吸引注意。摆动序列含延时，放一次性小任务执行，
+                // 不阻塞 mooncake 主循环（贴纸刚弹出时卡 UI 体验很差）。
+                mclog::tagInfo("VeRTC.Agent", "reminder TTS unavailable, shake to notify");
+                xTaskCreate([](void*) {
+                    for (int i = 0; i < 2; ++i) {
+                        {
+                            LvglLockGuard lock;
+                            GetStackChan().motion().yawServo().moveWithSpeed(-200, 300);
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(250));
+                        {
+                            LvglLockGuard lock;
+                            GetStackChan().motion().yawServo().moveWithSpeed(200, 300);
+                        }
+                        vTaskDelay(pdMS_TO_TICKS(250));
+                    }
+                    {
+                        LvglLockGuard lock;
+                        GetStackChan().motion().yawServo().moveWithSpeed(0, 300);
+                    }
+                    vTaskDelete(nullptr);
+                }, "remind_shake", 4096, nullptr, 3, nullptr);
+            }
+        });
+    }
 }
 
 // Called repeatedly while the App is running
 void AppAiAgent::onRunning()
 {
+    // 提醒计时泵：xiaozhi 链路由 _stackchan_update_task 驱动，VeRTC 链路靠这里。
+    // 不泵则 create_reminder 创建的提醒永远不会触发（计时器无人检查）。
+    tools::update_reminders();
+
     Backend pending_backend = Backend::None;
 
     {

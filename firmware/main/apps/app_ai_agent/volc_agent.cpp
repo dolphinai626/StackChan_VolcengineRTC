@@ -2260,4 +2260,27 @@ bool interrupt()
     return true;
 }
 
+bool notifyReminder(std::string_view message)
+{
+    // 会话已建联时用 ExternalTextToTTS（volc_send_text_to_agent，TTS 直接播报，
+    // 不经 LLM 改写，到点立刻原文播报）。待机/未建联时返回 false，由调用方走
+    // 弹窗+摇头提醒。
+    const std::string text = fmt::format("提醒时间到：{}", message);
+
+    // 发送纪律与音频/消息一致：_send_mutex 跨网络发送，_mutex 仅短校验。
+    std::lock_guard<std::mutex> send_lock(_send_mutex);
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        if (!_running || !_engine || !_conv_started.load()) {
+            return false;
+        }
+    }
+
+    // interrupt_mode=2：追加播报不打断当前对话（与官方 function_call_service
+    // 的提示播报用法一致）。
+    const int ret = volc_send_text_to_agent(_engine, text.c_str(), VOLC_AGENT_TYPE_TTS, 2);
+    mclog::tagInfo(_tag, "reminder TTS sent ret={} text={}", ret, text);
+    return ret == 0;
+}
+
 }  // namespace volc_agent

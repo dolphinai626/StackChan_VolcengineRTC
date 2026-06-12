@@ -3,6 +3,20 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [claude] VeRTC 提醒功能：计时泵 + 弹窗 + TTS/摇头播报（用户实测通过）
+
+- 占用域：firmware-audio + firmware-ui（reminder_view / stackchan_display 的字体接口）
+- 差异根因：update_reminders 计时泵与 on_reminder_triggered 处理器都只活在 xiaozhi
+  链路（_stackchan_update_task / startXiaozhi），VeRTC 链路提醒创建后永不触发
+- 修复（全部实测通过）：
+  - AppAiAgent::onRunning 泵 update_reminders；Volcengine 模式注册触发处理器
+  - 弹窗复用 ReminderView；其消息标签原用 montserrat（纯拉丁）导致中文空白，
+    新增 view::cjk_text_font()（assets 完整字体+缓存+回落），两链路同享修复
+  - 会话中播报：volc_send_text_to_agent TTS 直放（ExternalTextToTTS，
+    interrupt_mode=2 不打断对话）；待机：弹窗 + 摇头两次（独立小任务不阻塞 UI）
+- 遗留：⚠ 本轮观测 minimal sram 水位一度 3587B（历史会话期最低 ~7.6KB），
+  逼近耗尽红线，需单独排查近期合入改动的内部 SRAM 尖峰来源
+
 ## 2026-06-12 [codex] StackChan 播放卡顿 + VeRTC 后进入 AI.Agent 网络卡住排查
 
 - 占用域：firmware-audio + firmware-ui + docs-cloud
