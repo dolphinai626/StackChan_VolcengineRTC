@@ -16,6 +16,17 @@
 - 遗留：等用户配置云端 FunctionCallingConfig（客户端投递）+ 9 工具 schema 后联调；
   验证清单见 docs/CLOUD_TOOLS_CONFIG.md §5
 
+## 2026-06-12 [claude] 工具不执行排查 + 执行层加固
+
+- 占用域：firmware-audio
+- 结论：云端配置后设备收到 info 触发事件（字幕正常），但 tool_calls 本体仍未下发
+  （无一条 tool call: 日志），LLM 参数泄漏进 TTS（"speed。"/"6。"）——云端当前为
+  "触发通知模式"，需改为"客户端工具执行模式"→ debug-llm-no-reply-fc-config.md
+- 端侧加固（已烧录）：arguments 字符串/对象兼容；set_led_color 工具接管灯色
+  （修复状态机灯色瞬间覆盖工具颜色）+ 直写硬件；volc 启动对齐 xiaozhi 舵机使能；
+  set_volume/led applied 日志；未知 magic 警告日志
+- 遗留：云端模式整改后回归三件套（灯/音量/摇头）
+
 ## 2026-06-12 [claude] 建立多 AI 协作机制
 
 - 占用域：docs-cloud

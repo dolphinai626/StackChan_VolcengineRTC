@@ -2,6 +2,25 @@
 
 Status: [ROOT CAUSE CONFIRMED - 云端配置问题，待控制台整改]
 
+## Update 2026-06-12: 配置后进展与新证据（工具仍不执行）
+
+用户在控制台配置 FunctionCallingConfig 后的实测（串口 /tmp/stackchan_tooltest.log）：
+
+- 设备开始收到 `info` magic（function_calling 触发事件），三次调用
+  （set_head_angles×2、set_led_color×1）的 `function_calling triggered:` 日志齐全
+- **`tool` magic（tool_calls 本体）仍然从未下发**——全程无 `tool call:` 日志，
+  dispatchTool 从未执行，这是"工具不执行"的直接原因
+- `subtitle[bot] speed。`、`6。`：LLM 把工具参数片段当普通文本走 TTS——agent
+  没有进入"调用→等结果"流程，发完 info 通知就继续生成了
+- 判定：当前云端配置的是**触发通知模式**，需要改为**客户端工具执行模式**
+  （下发 tool_calls RTS 消息并等待设备 func 回包）
+
+端侧同轮加固（云端模式配对后应直接全通）：
+- arguments 兼容字符串/对象两种形态（对象形态此前会静默落default值="假执行"）
+- set_led_color 工具接管灯色（statusRgb 不再覆盖），并直写硬件立即生效
+- volc 启动对齐 xiaozhi 舵机使能（AutoAngleSync/AutoTorqueRelease）
+- set_volume/set_led_color 打印 applied 实际值；未知 magic 消息打警告日志
+
 ## Symptoms
 
 - RTP 时钟修复后 ASR 字幕完整准确，但部分轮次 LLM 无回复。

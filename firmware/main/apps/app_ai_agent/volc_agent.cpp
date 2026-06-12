@@ -39,6 +39,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -148,6 +149,9 @@ static std::atomic_bool _afe_fetch_started{false};
 // 唤醒前不上行音频（避免被服务端误当对话），唤醒后进入对话；对话期间下行静默
 // 超过 _conv_idle_timeout_ms 自动回落到等待唤醒。
 static std::atomic_bool _conversation_active{false};
+// 工具优先灯色接管：set_led_color 工具点亮后，状态机灯色不再覆盖（否则 LLM 口头
+// 确认进入 ANSWERING 的瞬间就刷掉工具刚设的颜色）。会话结束/工具熄灯时解除。
+static std::atomic_bool _led_tool_override{false};
 static std::atomic_bool _conv_wakenet_disabled{false};
 // 最近一次会话活动（唤醒/下行音频/明显上行人声）的时间戳，用于空闲超时回待机。
 static std::atomic<int64_t> _last_activity_us{0};
@@ -1165,6 +1169,8 @@ void afeFetchTask(void*)
                 mclog::tagInfo(_tag, "conversation idle timeout, back to wake-wait");
                 _conversation_active.store(false);
                 _conv_status.store(0);
+                // 会话结束，解除工具灯色接管，待机灯色恢复状态机控制。
+                _led_tool_override.store(false);
                 stopConversation();
                 if (_afe_iface->enable_wakenet) {
                     _afe_iface->enable_wakenet(_afe_data);
@@ -1345,6 +1351,14 @@ void onVolcEvent(volc_engine_t, volc_event_t* event, void*)
 // ---- 会话 UI 状态机 ----------------------------------------------------
 // 三种视觉状态，灯色/表情/口型由这里统一控制，避免 onConversationStatus 与
 // onAudioData 各自 showRgbColor 造成灯色互相打架。
+// 状态机灯色统一入口：工具接管期间（_led_tool_override）不写灯。
+void statusRgb(uint8_t r, uint8_t g, uint8_t b)
+{
+    if (_led_tool_override.load()) {
+        return;
+    }
+    GetHAL().showRgbColor(r, g, b);
+}
 // 注意：SetStatus 内部会按字符串自行设灯（LISTENING=蓝、SPEAKING=蓝），所以
 // 这里在 SetStatus 之后再 showRgbColor 覆盖成期望颜色作为唯一真相源。
 
@@ -1354,7 +1368,7 @@ void uiWaitingForWake()
     auto* d = Board::GetInstance().GetDisplay();
     d->SetStatus(Lang::Strings::LISTENING);  // 复用其"移除 speaking 动画"的逻辑
     d->SetEmotion("neutral");
-    GetHAL().showRgbColor(0x00, 0x30, 0x10);
+    statusRgb(0x00, 0x30, 0x10);
 }
 
 void uiListening()
@@ -1363,7 +1377,7 @@ void uiListening()
     auto* d = Board::GetInstance().GetDisplay();
     d->SetStatus(Lang::Strings::LISTENING);
     d->SetEmotion("neutral");
-    GetHAL().showRgbColor(0x00, 0x40, 0x00);
+    statusRgb(0x00, 0x40, 0x00);
 }
 
 void uiSpeaking()
@@ -1372,7 +1386,7 @@ void uiSpeaking()
     auto* d = Board::GetInstance().GetDisplay();
     d->SetStatus(Lang::Strings::SPEAKING);  // 添加 SpeakingModifier 口型动画
     d->SetEmotion("happy");
-    GetHAL().showRgbColor(0x00, 0x00, 0x40);
+    statusRgb(0x00, 0x00, 0x40);
 }
 
 int sendBinaryJsonMessage(volc_engine_t engine, const char* magic, cJSON* root)
@@ -1481,7 +1495,7 @@ void onConversationStatus(volc_engine_t, volc_conv_status_e status, void*)
         case VOLC_CONV_STATUS_THINKING:
             mclog::tagInfo(_tag, "thinking");
             Board::GetInstance().GetDisplay()->SetEmotion("doubtful");
-            GetHAL().showRgbColor(0x40, 0x30, 0x00);
+            statusRgb(0x40, 0x30, 0x00);
             break;
         case VOLC_CONV_STATUS_ANSWERING:
             mclog::tagInfo(_tag, "answering");
@@ -1607,9 +1621,17 @@ std::string dispatchTool(const char* tool_name, const char* args_json)
         int green = std::clamp(jsonInt(args, "green", 0), 0, 168);
         int blue = std::clamp(jsonInt(args, "blue", 0), 0, 168);
 
-        LvglLockGuard lock;
-        GetStackChan().leftNeonLight().setColor(red, green, blue);
-        GetStackChan().rightNeonLight().setColor(red, green, blue);
+        // 工具点亮期间阻止状态机灯色覆盖（否则 LLM 口头确认进 ANSWERING 的瞬间
+        // statusRgb 就把颜色刷掉）；全 0 熄灯则交还状态机控制。
+        _led_tool_override.store(!(red == 0 && green == 0 && blue == 0));
+        {
+            LvglLockGuard lock;
+            GetStackChan().leftNeonLight().setColor(red, green, blue);
+            GetStackChan().rightNeonLight().setColor(red, green, blue);
+        }
+        // 同步直写硬件立即生效（NeonLight 走 UI 泵逐帧渐变，留作动画收尾）。
+        GetHAL().showRgbColor(red, green, blue);
+        mclog::tagInfo(_tag, "set_led_color applied r={} g={} b={}", red, green, blue);
         result = R"({"ok":true})";
     } else if (std::strcmp(tool_name, "self.robot.create_reminder") == 0) {
         int duration_seconds = std::clamp(jsonInt(args, "duration_seconds", 60), 1, 86400);
@@ -1642,9 +1664,12 @@ std::string dispatchTool(const char* tool_name, const char* args_json)
     } else if (std::strcmp(tool_name, "self.robot.set_volume") == 0) {
         int volume = std::clamp(jsonInt(args, "volume", 70), 0, 100);
         auto codec = Board::GetInstance().GetAudioCodec();
+        int old_volume = -1;
         if (codec) {
+            old_volume = codec->output_volume();
             codec->SetOutputVolume(volume);
         }
+        mclog::tagInfo(_tag, "set_volume applied {} -> {}", old_volume, volume);
         result = fmt::format(R"({{"ok":true,"volume":{}}})", volume);
     }
 
@@ -1677,8 +1702,18 @@ void handleToolMessage(volc_engine_t engine, cJSON* root)
         cJSON* arguments = function ? cJSON_GetObjectItem(function, "arguments") : nullptr;
         const char* call_id = cJSON_GetStringValue(id);
         const char* tool_name = cJSON_GetStringValue(name);
+        // arguments 官方协议是 JSON 字符串，但服务端也可能直接发 JSON 对象。
+        // 若按字符串取失败则序列化对象——否则所有参数静默落到默认值，工具"执行
+        // 成功"却无实际效果（音量默认 70、LED 全 0、转头 -9999 不动）。
         const char* args_json = cJSON_GetStringValue(arguments);
+        char* args_owned = nullptr;
+        if (!args_json && arguments &&
+            (cJSON_IsObject(arguments) || cJSON_IsArray(arguments))) {
+            args_owned = cJSON_PrintUnformatted(arguments);
+            args_json = args_owned;
+        }
         if (!call_id || !tool_name) {
+            cJSON_free(args_owned);
             continue;
         }
 
@@ -1699,6 +1734,8 @@ void handleToolMessage(volc_engine_t engine, cJSON* root)
         const bool ok = tool_result.find("\"error\"") == std::string::npos;
         Board::GetInstance().GetDisplay()->SetChatMessage(
             "system", fmt::format("[工具] {} {}", short_name, ok ? "完成" : "失败").c_str());
+
+        cJSON_free(args_owned);
     }
 }
 
@@ -1859,6 +1896,14 @@ void onMessageData(volc_engine_t, const void* data, size_t len, volc_message_inf
         }
         handleSubtitleMessage(root);
         cJSON_Delete(root);
+    } else if (len > 8 && std::isalnum(static_cast<unsigned char>(text[0])) &&
+               std::isalnum(static_cast<unsigned char>(text[1])) &&
+               std::isalnum(static_cast<unsigned char>(text[2])) &&
+               std::isalnum(static_cast<unsigned char>(text[3]))) {
+        // 未识别的 binary magic：打日志而非静默丢弃，排查云端用了哪个通道投递
+        // （已知 magic：tool/subv/info/func/ctrl/conv）。
+        mclog::tagWarn(_tag, "unhandled message magic '{}{}{}{}' len={}",
+                       text[0], text[1], text[2], text[3], len);
     } else if (std::memchr(text, 0, len) == nullptr) {
         std::string message(text, len);
         Board::GetInstance().GetDisplay()->SetChatMessage("assistant", message.c_str());
@@ -2044,8 +2089,15 @@ bool start()
     // 视频桥暂时禁用：摄像头的 mmap buffer (~150KB) + JPEG 编码会进一步压低内部 SRAM，
     // 当前 AEC + AFE 已经把可用 SRAM 压到 5KB 以下，先把视频路径让给音频确保链路活下来。
     // 连接完成，进入"等待唤醒"视觉态（中性表情 + 待机灯色）。
+    _led_tool_override.store(false);
     {
         LvglLockGuard lock;
+        // 舵机使能对齐 xiaozhi 链路（Hal::startXiaozhi 同款配置）：自动角度同步 +
+        // 空闲自动释放力矩。volc 链路此前从未配置，是工具转头/摇头无实际动作的
+        // 嫌疑配置差异。
+        auto& motion = GetStackChan().motion();
+        motion.setAutoAngleSyncEnabled(true);
+        motion.setAutoTorqueReleaseEnabled(true);
         uiWaitingForWake();
     }
     mclog::tagInfo(_tag, "started");
