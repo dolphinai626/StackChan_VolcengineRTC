@@ -3,6 +3,17 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [codex] StackChan 播放卡顿 + VeRTC 后进入 AI.Agent 网络卡住排查
+
+- 占用域：firmware-audio + firmware-ui + docs-cloud
+- 计划：基于 Claude 最新 main 检查 VeRTC/AI.Agent 互相影响；排查 StackChan/Xiaozhi 播放卡顿原因；
+  排查 VeRTC 使用完成后再进入 AI.Agent 卡住并提示需要连接网络的问题；最小修复并验证
+- 结果：已定位并修复两处原生链路问题：Xiaozhi 下行 Opus 单包多帧只解首帧导致播放断续；
+  WiFi 已由 VeRTC/HAL 连上后，AI.Agent 重新注册 Xiaozhi 网络回调却收不到 Connected 事件，导致卡在网络流程；
+  已同步更新 `firmware/patches/xiaozhi-esp32.patch`，`git diff --check`、patch apply check、`idf.py build`、
+  `idf.py -p /dev/cu.usbmodem2101 build flash` 均通过，串口复位启动正常
+- 遗留：未做屏幕交互实测 `VeRTC.Agent -> 返回首页 -> AI.Agent` 和原生下行播放连续性，需要人工点选确认
+
 ## 2026-06-12 [claude] VeRTC 视觉采集 + 工具执行层实测修复（音量崩溃两层根因）
 
 - 占用域：firmware-audio + cores3_audio_codec

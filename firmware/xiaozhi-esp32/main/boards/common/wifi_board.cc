@@ -82,6 +82,11 @@ void WifiBoard::StartNetwork() {
         }
     });
 
+    if (wifi_manager.IsConnected()) {
+        OnNetworkEvent(NetworkEvent::Connected, wifi_manager.GetSsid());
+        return;
+    }
+
     // Try to connect or enter config mode
     TryWifiConnect();
 }
