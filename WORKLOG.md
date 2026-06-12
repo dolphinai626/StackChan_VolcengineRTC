@@ -3,6 +3,13 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-12 [codex] 首页拆分 AI.Agent / VeRTC.Agent + 多 AI 项目规则补充
+
+- 占用域：firmware-ui + firmware-audio + docs-cloud
+- 计划：更新协作规则；把首页入口拆成原生 StackChan AI.Agent 与 Volc VeRTC.Agent；验证后合回 main 并删除临时分支
+- 结果：进行中
+- 遗留：待验证
+
 ## 2026-06-12 [claude] volcRTC 本地工具调用（RTS 协议）+ 字幕显示调用过程 + 唤醒前声源定位对齐
 
 - 占用域：firmware-audio（volc_agent.cpp）+ docs-cloud（服务端 tools 配置梳理）
