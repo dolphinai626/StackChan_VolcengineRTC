@@ -3,6 +3,14 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-13 [trae] 刷新 README 工具能力与排查方案
+
+- 占用域：docs-cloud（README/WORKLOG）
+- 计划：基于最新工具能力说明与 debug 排查结论刷新 README；仅更新文档；验证 Markdown diff 后提交并推送 main
+- 结果：README 已更新双入口说明、9 个 volcRTC 端侧工具、客户端投递 RTS 要求、三类排查入口与 OTA 约束；
+  `git diff --check` 通过，链接目标文件存在，随 `[trae]` 提交推送到 GitHub
+- 遗留：无
+
 ## 2026-06-13 [trae] 确认多 AI 协作状态并同步 main 到 GitHub
 
 - 占用域：docs-cloud（WORKLOG 同步记录）

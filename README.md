@@ -1,26 +1,28 @@
-# StackChan VolC Open
+# StackChan Volcengine RTC
 
 > 在 [M5Stack StackChan](https://github.com/m5stack/StackChan) 平台上提供**两套开箱即用的 AI 对话后端**，作为开源参考实现：
 >
-> - `AppAiAgent`：基于 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 协议，适合自托管 / 私有部署
-> - `AppVolcengineAi`：基于 [VolcEngine ConversationalAI Embedded Kit 2.0](https://github.com/volcengine/ConversationalAI-Embedded-Kit-2.0)，适合云端智能体编排 + 视觉理解
+> - `AI.Agent`：基于 [78/xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) 协议，适合自托管 / 私有部署
+> - `VeRTC.Agent`：基于 [VolcEngine ConversationalAI Embedded Kit 2.0](https://github.com/volcengine/ConversationalAI-Embedded-Kit-2.0)，适合云端智能体编排、RTC 音视频与端侧工具调用
 >
-> 两个 App 共享板级 HAL（`xiaozhi-board-hal`）、Avatar/LED/Servo 表现层与 6 个 Function Call 工具。
+> 两个入口共享板级 HAL、Avatar/LED/Servo 表现层与 StackChan 机器人能力；首页中 `VeRTC.Agent` 在 `AI.Agent` 前。
 
 ## Highlights
 
-- **双后端共存** — 同一固件，launcher 中选择进入哪个 AI 后端；任意时刻仅一个 App 持有音频/摄像头资源。
+- **双后端共存** — 同一固件，launcher 中选择 `VeRTC.Agent` 或 `AI.Agent`；任意时刻仅一个入口持有音频/摄像头资源。
 - **板级 HAL 复用** — 板级代码独立 component，可被 ESP32 任意 AI 项目引用。
-- **云端智能体编排** — 端侧只暴露 6 个原子工具（servo / led / reminder / vision），所有"智能"通过更新云端智能体配置完成，无需 OTA。
-- **视觉理解** — 火山后端支持被动取帧 + 单 JPEG 上传，按云端 `vision_frame_required` 事件触发。
+- **云端智能体编排** — `VeRTC.Agent` 暴露 9 个端侧工具（舵机 / 摇头 / LED / 提醒 / 音量），云端必须用客户端投递 RTS 消息调用工具。
+- **工具调用可观测** — volcRTC 与 Xiaozhi 链路都会显示 `[工具] xxx 调用中/执行中/完成` 字幕，便于现场排查。
+- **视觉链路** — 火山后端支持低频 MJPEG 视觉采集，经 RTC 发送给云端智能体。
+- **禁止设备整包 OTA** — `AI.Agent` / Xiaozhi 只检查并提示新版本；同步 StackChan 开源更新必须走代码层手动移植，避免覆盖 `VeRTC.Agent` 链路。
 - **零凭据仓库** — 所有 ProductKey/Secret/AccessKey 走 NVS 或 `sdkconfig.local`，仓库严禁明文。
 
 ## Quick Start
 
 ```bash
 # 1. 克隆项目并拉取上游依赖
-git clone https://github.com/<your-org>/stackchan-volc-open.git
-cd stackchan-volc-open
+git clone https://github.com/dolphinai626/StackChan_VolcengineRTC.git
+cd StackChan_VolcengineRTC
 ./scripts/fetch_repos.sh        # 拉取 xiaozhi-board-hal / xiaozhi-app / volc_conv_ai
 
 # 2. 配置凭据（不进入 git）
@@ -28,6 +30,7 @@ cp firmware/sdkconfig.local.example firmware/sdkconfig.local
 $EDITOR firmware/sdkconfig.local                     # 填入 BotID / AccessKey 等
 
 # 3. 构建并烧录
+source /Users/bytedance/esp-idf-v5.5.2/export.sh
 cd firmware
 idf.py set-target esp32s3
 idf.py build flash monitor
@@ -36,41 +39,54 @@ idf.py build flash monitor
 ## Architecture
 
 ```
-              ┌─────── AppLauncher (互斥高亮) ────────┐
-              │                                      │
-  AppAiAgent (Xiaozhi)            AppVolcengineAi (火山)
-              │                                      │
-              └──── AiBackendArbiter (互斥) ─────────┘
-                            │
-              AiAgentBridge (字幕/情绪/嘴型事件)
-                            │
-            xiaozhi-board-hal (板级，共享)
-                            │
-                M5Stack CoreS3 / ESP32-S3
+                 Mooncake Launcher
+                         │
+        ┌────────────────┴────────────────┐
+        │                                 │
+  VeRTC.Agent                       AI.Agent
+  AppAiAgent::Volcengine            AppAiAgent::StackChan
+        │                                 │
+  Volc RTC/RTS                      Xiaozhi/MCP
+        │                                 │
+        └──────── Shared HAL / UI / Robot ┘
+                         │
+               M5Stack CoreS3 / ESP32-S3
 ```
 
-详细架构、互斥约束、UI 规范、Function Call schema 见 [docs/DESIGN.md](docs/DESIGN.md)。
+云端工具配置见 [docs/CLOUD_TOOLS_CONFIG.md](docs/CLOUD_TOOLS_CONFIG.md)。
 落地手册见 [docs/PORTING.md](docs/PORTING.md)。
 
 ## Function Call Tools
 
-设备只暴露 6 个原子能力，云端智能体（火山方舟 / Xiaozhi 后端）通过 schema 配置编排：
+`VeRTC.Agent` 通过火山智能体 Tools 配置暴露 9 个端侧能力：
 
-| Tool                          | 描述                          |
-| ----------------------------- | ----------------------------- |
-| `self.robot.get_head_angles`  | 读舵机当前 yaw/pitch          |
-| `self.robot.set_head_angles`  | 设置舵机目标位置（带速度）    |
-| `self.robot.set_led_color`    | 设置左右 NeonLight 颜色       |
-| `self.robot.create_reminder`  | 创建定时提醒                  |
-| `self.robot.stop_reminder`    | 取消提醒                      |
-| `self.robot.capture_vision`   | 单帧 JPEG 上传至云端视觉通道  |
+| Tool                         | 描述                       |
+| ---------------------------- | -------------------------- |
+| `self.robot.get_head_angles` | 读舵机当前 yaw/pitch       |
+| `self.robot.set_head_angles` | 设置舵机目标位置（带速度） |
+| `self.robot.shake_head`      | 左右摇头                   |
+| `self.robot.set_led_color`   | 设置左右 NeonLight 颜色    |
+| `self.robot.create_reminder` | 创建定时提醒               |
+| `self.robot.get_reminders`   | 获取未完成提醒列表         |
+| `self.robot.stop_reminder`   | 取消提醒                   |
+| `self.robot.get_volume`      | 读取扬声器音量             |
+| `self.robot.set_volume`      | 设置扬声器音量             |
 
-完整 JSON schema 见 [docs/DESIGN.md §5.3](docs/DESIGN.md)。
+火山链路必须把 Function Call 投递方式配置为**客户端投递（RTS 房间消息）**：
+服务端下发 `tool` 消息，设备执行后用 `func` 回包。完整 JSON schema、System Prompt 模板与验证清单见 [docs/CLOUD_TOOLS_CONFIG.md](docs/CLOUD_TOOLS_CONFIG.md)。
+
+`AI.Agent` / Xiaozhi 链路通过 MCP 自动注册同名机器人能力；音量使用 Xiaozhi 内建 `self.get_device_status` / `self.audio_speaker.set_volume`。
+
+## Troubleshooting
+
+- 工具不执行、LLM 调工具后无回复：优先检查云端 FunctionCallingConfig 是否为客户端投递。若串口只有 `function_calling triggered:`，没有 `tool call:`，说明只收到了触发通知，工具本体没有下发。详见 [debug-llm-no-reply-fc-config.md](debug-llm-no-reply-fc-config.md)。
+- 上行 ASR 截断或长句丢失：RTC Opus RTP 参数必须保持 `48000/960`，端侧编码输入仍是 16k PCM。详见 [debug-uplink-stream-drop.md](debug-uplink-stream-drop.md)。
+- `VeRTC.Agent` 后进入 `AI.Agent` 卡网络，或 Xiaozhi 播放卡顿：已修复 WiFi 已连接路径事件补发与 Opus 单包多帧解码。详见 [debug-stackchan-playback-network.md](debug-stackchan-playback-network.md)。
 
 ## Hardware
 
 - M5Stack CoreS3（默认）
-- 任何 [xiaozhi-board-hal](https://github.com/<org>/xiaozhi-board-hal) 已支持的 ESP32-S3 板（理论可移植）
+- 任何已适配本仓库板级 HAL 的 ESP32-S3 板（理论可移植）
 
 ## License
 
