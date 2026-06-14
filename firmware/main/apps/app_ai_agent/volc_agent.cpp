@@ -1506,9 +1506,17 @@ void onConversationStatus(volc_engine_t, volc_conv_status_e status, void*)
     }
     // 记录会话状态供上行门控判断：THINKING/ANSWERING 期间停采集，其余期间正常上行。
     _conv_status.store(static_cast<int>(status));
-    // 任何状态流转都视为会话活跃，刷新空闲计时：避免模型思考/回复期间（无上行人声、
-    // thinking 期亦无下行音频）被 idle timeout 误判断联。
-    _last_activity_us.store(esp_timer_get_time());
+    // 续命只认"服务端真在处理"的状态（THINKING/ANSWERING）：思考/回复期间无上行
+    // 人声、thinking 期亦无下行音频，靠这里防误断。LISTENING/ANSWER_FINISH/
+    // INTERRUPTED 是"等用户/回合结束"态，绝不能续命——否则服务端异常时（如提醒
+    // TTS 注入后进入 LISTENING↔ANSWER_FINISH 高频抖动）每次状态推送都重置 idle
+    // 计时，会话永不退出。用户真说话(上行 RMS)/bot 真播报(下行音频)/ASR 字幕仍各自
+    // 独立续命，不受此处影响。
+    const bool server_busy =
+        (status == VOLC_CONV_STATUS_THINKING || status == VOLC_CONV_STATUS_ANSWERING);
+    if (server_busy) {
+        _last_activity_us.store(esp_timer_get_time());
+    }
     sendExternalDatePromptIfNeeded();
     switch (status) {
         case VOLC_CONV_STATUS_LISTENING:
