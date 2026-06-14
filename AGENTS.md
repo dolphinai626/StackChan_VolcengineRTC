@@ -87,7 +87,11 @@ idf.py -p /dev/cu.usbmodem2101 build flash    # 烧录（仅持机会话）
 - 锁序固定 `_send_mutex → _mutex`；网络发送不得持 `_mutex`
 - volc SDK 上游有两个生命周期 bug，由 `patches/volc_conv_ai.patch` 修复，
   已提上游 PR volcengine/ConversationalAI-Embedded-Kit-2.0#5
-- CoreS3 无硬件回采参考，AEC 不可用，半双工门控是当前设计约束
+- CoreS3 **有**硬件 AEC 回采（官方原理图确认 ES7210 MIC3/pin31-32 接 SPK 差分回采，
+  网络名 AEC_P/AEC_N，经 R40/R42 150K 分压耦合）。当前固件**未启用**（只读 2 麦、
+  AUDIO_INPUT_REFERENCE=false），所以现在仍用半双工门控。启用硬件 AEC 需：ES7210 选上
+  MIC3 + 3 通道 TDM + AFE MMR，正在 AEC 分支验证。详见 debug-aec-hardware-capability.md。
+  （早期"CoreS3 无回采、AEC 不可用"的结论已被原理图推翻，勿再沿用）
 - 首页入口已拆分：`VeRTC.Agent` 走 Volcengine 链路，`AI.Agent` 走 StackChan/Xiaozhi 原生链路。
   升级 StackChan 原生链路时，不得改动或回退 Volcengine 运行路径、RTC RTP 参数、工具调用链路、
   唤醒/字幕/音视频状态机，除非任务明确要求且同时完成 Volcengine 回归验证。
