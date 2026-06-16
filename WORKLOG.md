@@ -3,6 +3,19 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-16 [codex] 排查 VeRTC 回声与指示灯回归
+
+- 占用域：firmware-audio + firmware-ui + docs-cloud
+- 计划：基于当前升级分支与 `origin/main` 比对，定位 VeRTC.Agent 进入后出现回声、指示灯状态不对的回归来源；
+  优先核对已验证无回声的 RTC 音频/AEC/门控/指示灯状态链路，最小修复并构建烧录验证
+- 结果：确认 AEC 分支未合入 main；当前升级分支的 RTC codec/config/核心音频参数与 main 无差异。
+  修复 VeRTC 本地播放门控：TTS 下行到达与实际扬声器输出期间延长半双工 gate，避免服务端状态/指示灯滞后时
+  把喇叭回声送回云端；同时把播放指示灯切换从 SDK 音频回调移到会话循环，降低下行音频回调阻塞。
+  `idf.py build`、`idf.py -p /dev/cu.usbmodem2101 build flash` 通过；串口实测 VeRTC 可进入、联网、
+  唤醒、视频帧发送、字幕与多轮 TTS 播放正常，内部 SRAM 稳定在约 32KB，语音转写中出现“终于不卡了”
+- 遗留：仍看到每 2s 一帧视频 JPEG 编码约 60-187ms 与偶发 FT6336 timeout；当前未再影响本轮 VeRTC 对话，
+  后续若长会话仍卡顿，优先对视频发送节流做 A/B
+
 ## 2026-06-16 [codex] 修复 1.4.2 升级回归：图标、VeRTC 闪退、AI.Agent 卡顿
 
 - 占用域：firmware-ui + firmware-audio + docs-cloud

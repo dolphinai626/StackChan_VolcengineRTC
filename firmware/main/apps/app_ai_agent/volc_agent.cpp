@@ -95,6 +95,9 @@ constexpr size_t _playback_queue_max_frames = 96;
 // 起播预缓冲 8 包（~160ms）：2 包（40ms）太薄，回答首包到达节奏稍有抖动就 DMA
 // 欠载，表现为 TTS 开头卡顿；160ms 的起播延迟听感上可忽略。
 constexpr size_t _playback_prime_frames = 8;
+static std::atomic<int64_t> _playback_gate_until_us{0};
+static std::atomic_bool _playback_visual_active{false};
+static std::atomic_bool _playback_visual_pending{false};
 
 // Async uplink queue: audioCaptureTask enqueues 16kHz mono PCM frames; a
 // dedicated uplink task does Opus encode + volc_send_audio_data. Decoupling
@@ -160,8 +163,8 @@ static std::atomic<int64_t> _external_prompt_last_attempt_us{0};
 constexpr int64_t _conv_idle_timeout_ms = 15000;  // 对话静默 15s 回等待唤醒
 constexpr uint32_t _uplink_active_rms = 600;      // 上行帧 RMS 超过此值视为用户在讲话
 
-// 会话状态记录：仅用于 UI（灯色/表情/口型）与 idle timeout 判定，不再用于上行门控。
-// 麦克风全程持续采集上行，不因任何状态丢帧。0 表示未进入对话；其余对应 volc_conv_status_e。
+// 会话状态记录：用于 UI（灯色/表情/口型）、idle timeout 与半双工上行门控。
+// 0 表示未进入对话；其余对应 volc_conv_status_e。
 static std::atomic<int> _conv_status{0};
 
 // 会话 UI 状态切换（定义在文件后部），afeFetchTask 唤醒/超时时需要调用。
@@ -408,6 +411,16 @@ bool sendAudioOpus(const uint8_t* data, size_t len)
     return ret == 0;
 }
 
+void extendPlaybackGate(int64_t duration_ms)
+{
+    _playback_gate_until_us.store(esp_timer_get_time() + duration_ms * 1000);
+}
+
+bool isPlaybackGateActive()
+{
+    return esp_timer_get_time() < _playback_gate_until_us.load();
+}
+
 void enqueueUplink(const int16_t* pcm, size_t samples)
 {
     if (!pcm || samples == 0) {
@@ -526,6 +539,9 @@ void flushPlaybackQueue()
     std::lock_guard<std::mutex> lock(_playback_mutex);
     _playback_queue.clear();
     _playback_priming.store(true);
+    _playback_gate_until_us.store(0);
+    _playback_visual_active.store(false);
+    _playback_visual_pending.store(false);
 }
 
 void playbackTask(void*)
@@ -608,6 +624,7 @@ void playbackTask(void*)
                     audio_codec->EnableOutput(true);
                 }
                 audio_codec->OutputData(playback_pcm);
+                extendPlaybackGate(500);
             }
             if (raw.consumed == 0) {
                 // guard against a stuck decoder that reports no progress
@@ -972,15 +989,11 @@ void audioCaptureTask(void*)
                 uplink_accum.insert(uplink_accum.end(), uplink_ptr, uplink_ptr + uplink_samples);
             }
 
-            // 半双工门控，与指示灯逻辑严格一致：
-            //   - ANSWERING（蓝灯，扬声器播 TTS）：停止采集上行，丢弃帧。CoreS3 无 AEC，
-            //     若此期间继续上行，会把 TTS 回声当用户讲话满速上行，压垮发送链路并被
-            //     服务端误判为"用户抢话"触发 INTERRUPTED（状态紊乱）。
-            //   - LISTENING/THINKING/INTERRUPTED/ANSWER_FINISH 及待机：持续采集，不丢帧。
-            // 命中门控时只丢弃、不入队，绝不发送静音帧——纯静音帧会被服务端 VAD 当作明确
-            // 静音证据触发 endpoint，把用户半句话切走。
+            // 半双工门控：服务端 ANSWERING 状态或本地真实播放/尾音窗口内停止上行。
+            // 仅依赖 conv_status 会被状态事件滞后击穿：喇叭已播 TTS 但本地仍显示
+            // LISTENING，此时继续上行会把 TTS 回声送回云端。
             const int conv = _conv_status.load();
-            const bool model_busy = (conv == VOLC_CONV_STATUS_ANSWERING);
+            const bool model_busy = (conv == VOLC_CONV_STATUS_ANSWERING) || isPlaybackGateActive();
 
             while (uplink_accum.size() >= _opus_uplink_frame_samples) {
                 if (model_busy) {
@@ -1172,6 +1185,9 @@ void afeFetchTask(void*)
                 mclog::tagInfo(_tag, "conversation idle timeout, back to wake-wait");
                 _conversation_active.store(false);
                 _conv_status.store(0);
+                _playback_gate_until_us.store(0);
+                _playback_visual_active.store(false);
+                _playback_visual_pending.store(false);
                 // 会话结束，解除工具灯色接管，待机灯色恢复状态机控制。
                 _led_tool_override.store(false);
                 stopConversation();
@@ -1185,6 +1201,16 @@ void afeFetchTask(void*)
                 uiWaitingForWake();
                 Board::GetInstance().GetDisplay()->SetChatMessage("system", "待连接");
                 continue;
+            }
+
+            if (_playback_visual_pending.exchange(false)) {
+                uiSpeaking();
+            } else if (_playback_visual_active.load() && !isPlaybackGateActive()) {
+                const int conv = _conv_status.load();
+                if (conv != VOLC_CONV_STATUS_ANSWERING && conv != VOLC_CONV_STATUS_THINKING) {
+                    _playback_visual_active.store(false);
+                    uiListening();
+                }
             }
 
             vTaskDelay(pdMS_TO_TICKS(100));
@@ -1565,6 +1591,10 @@ void onAudioData(volc_engine_t, const void* data, size_t len, volc_audio_frame_i
 
     if (info->data_type == VOLC_AUDIO_DATA_TYPE_OPUS) {
         _last_activity_us.store(esp_timer_get_time());
+        extendPlaybackGate(800);
+        if (!_playback_visual_active.exchange(true)) {
+            _playback_visual_pending.store(true);
+        }
         playAudioOpus(static_cast<const uint8_t*>(data), len);
         return;
     }
@@ -2013,6 +2043,9 @@ void stopConversation()
     _conv_started.store(false);
     _external_prompt_sent.store(false);
     _external_prompt_last_attempt_us.store(0);
+    _playback_gate_until_us.store(0);
+    _playback_visual_active.store(false);
+    _playback_visual_pending.store(false);
 }
 
 }  // namespace
