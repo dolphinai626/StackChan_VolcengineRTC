@@ -1,7 +1,7 @@
 # StackChan VolC Open — ESP-IDF top-level CMake
 cmake_minimum_required(VERSION 3.16)
 
-set(PROJECT_VER "1.4.1")
+set(PROJECT_VER "1.4.2")
 add_definitions(-DFIRMWARE_VERSION=\"${PROJECT_VER}\")
 add_compile_options(-Wno-missing-field-initializers)
 

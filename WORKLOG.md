@@ -3,6 +3,19 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-16 [codex] 基于 main 手动同步 StackChan 最新系统
+
+- 占用域：firmware-ui + docs-cloud
+- 计划：从 `origin/main` 拉独立分支；确认 m5stack/StackChan 最新 upstream；手动移植仍缺失的
+  StackChan 原生 v1.4.2 变更；保留 VeRTC/AI.Agent 双入口、Volcengine 链路和 OTA 禁用逻辑；
+  编译、烧录并验证主功能后再等待合回 main
+- 结果：已确认 m5stack/StackChan upstream main 仍为 `fd09a744`（firmware v1.4.2）；补齐
+  `PROJECT_VER=1.4.2`、头像点击 2 秒防抖、pitch 舵机堵转保护；未改 `firmware/xiaozhi-esp32/`
+  vendored 代码，未更新 patch；`idf.py reconfigure build` 与
+  `idf.py -p /dev/cu.usbmodem101 build flash` 通过，串口确认 App version 1.4.2、首页仍按
+  `VeRTC.Agent` → `AI.Agent` 创建；AI.Agent 启动日志确认音频/MCP/OTA 检查正常且 OTA 只检查不升级
+- 遗留：未合回 main；等待屏幕点击/真实对话场景确认 VeRTC.Agent 与 AI.Agent 主功能后再合并删除分支
+
 ## 2026-06-13 [trae] 刷新 README 工具能力与排查方案
 
 - 占用域：docs-cloud（README/WORKLOG）

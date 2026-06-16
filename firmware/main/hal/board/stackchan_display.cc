@@ -320,11 +320,19 @@ void StackChanAvatarDisplay::SetupUI()
     auto assets_font = LoadAssetsTextFont();
     avatar->init(lv_screen_active(), assets_font ? assets_font : &BUILTIN_TEXT_FONT);
     avatar->getPanel()->onClick().connect([]() {
+        static uint32_t last_toggle_tick = 0;
+        const uint32_t now               = GetHAL().millis();
+        if (last_toggle_tick != 0 && now - last_toggle_tick < 2000) {
+            return;
+        }
+
         if (volc_agent::isRunning()) {
+            last_toggle_tick = now;
             volc_agent::interrupt();
             return;
         }
         if (hal_bridge::is_xiaozhi_mode()) {
+            last_toggle_tick = now;
             hal_bridge::toggle_xiaozhi_chat_state();
         }
     });
