@@ -57,8 +57,17 @@ Status: [PARTIAL VERIFIED]
   OTA 检查启动；日志显示 `Ota: Current version: 1.4.2` 与 `Ota: Current is the latest version`，未触发 OTA 写分区。
 - 2026-06-16 独立 worktree 首次未带 `firmware/sdkconfig.local` 时，`VeRTC.Agent` 正常打开但因缺少本地私密配置
   报 `missing volc config` 并返回首页；同步 ignored 的本地 `sdkconfig.local` 后重新构建烧录，启动与首页验证通过。
-- 2026-06-16 启动日志仍有既有首页/status bar 图标资源缺失报错；相关资源不在本次 1.4.2 升级 diff 中，本轮未扩大范围修复。
-- 待执行：屏幕点击与真实对话场景确认 VeRTC.Agent 完整会话、AI.Agent 唤醒/对话体感正常后，再合并回 main 并删除分支。
+- 2026-06-16 补齐 upstream 1.4.2 `assets_bin/*.bin` 后重新构建烧录，启动日志不再出现
+  `get image asset icon_*.bin failed`。
+- 2026-06-16 `VeRTC.Agent` 启动失败路径改为留在当前页提示“连接失败”，避免因本地配置缺失等边界错误直接退回首页；
+  同步 ignored 的 `firmware/sdkconfig.local` 后删除旧 `sdkconfig` 并 `idf.py reconfigure build`，确认
+  `CONFIG_VOLC_*` 本地私密配置进入构建。
+- 2026-06-16 烧录后串口实测 `VeRTC.Agent`：WiFi 连接成功、`VOLC-Agent started`、唤醒后 connected、
+  字幕、下行音频与视频帧持续运行，未再出现进入即退回首页。
+- 2026-06-16 AI.Agent/Xiaozhi 侧降低运动链路负载：进入 Xiaozhi 时关闭 `setAutoAngleSyncEnabled(true)`，
+  pitch 堵转反馈频率从 50ms 降为 200ms；前一轮串口实测 AI.Agent 可进入、联网、唤醒并完成语音对话。
+- 待执行：屏幕点击完成 `VeRTC.Agent -> 返回首页 -> AI.Agent` 连续链路实测后，再合并回 main 并删除分支。
+  本轮 VeRTC 长会话观察到 minimal SRAM 低至 1443B，且长时间运行后有少量网络 `Not enough space`，如仍卡顿需继续排查。
 
 ## Resolution
 

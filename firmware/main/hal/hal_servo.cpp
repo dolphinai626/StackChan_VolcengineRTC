@@ -174,7 +174,7 @@ private:
     int _zero_pos      = 0;
     Mode _current_mode = Mode::Position;
 
-    static constexpr uint32_t kStallFeedbackIntervalMs = 50;
+    static constexpr uint32_t kStallFeedbackIntervalMs = 200;
     static constexpr int kStallMinTargetDeltaRaw       = 8;
     static constexpr int kStallMaxPositionDeltaRaw     = 1;
     static constexpr int kStallCurrentRiseThreshold    = 80;

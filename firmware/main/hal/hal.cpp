@@ -198,7 +198,7 @@ void Hal::startXiaozhi()
     mclog::tagInfo(_tag, "start xiaozhi");
 
     auto& motion = GetStackChan().motion();
-    motion.setAutoAngleSyncEnabled(true);
+    motion.setAutoAngleSyncEnabled(false);
     motion.setAutoTorqueReleaseEnabled(true);
 
     // Setup reminder handler

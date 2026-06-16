@@ -118,7 +118,8 @@ void AppAiAgent::onRunning()
         if (_volc_start_failed) {
             _volc_start_failed = false;
             _active_backend = Backend::None;
-            close();
+            Board::GetInstance().GetDisplay()->SetEmotion("sad");
+            Board::GetInstance().GetDisplay()->SetChatMessage("system", "连接失败");
         }
 
         GetStackChan().update();

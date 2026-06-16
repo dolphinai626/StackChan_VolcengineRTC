@@ -3,6 +3,18 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-16 [codex] 修复 1.4.2 升级回归：图标、VeRTC 闪退、AI.Agent 卡顿
+
+- 占用域：firmware-ui + firmware-audio + docs-cloud
+- 计划：在 `codex/stackchan-latest-manual-upgrade` 分支定位首页 icon 缺失、VeRTC.Agent 进入后闪退、
+  AI.Agent/Xiaozhi 进入卡顿；最小修复后构建、烧录、串口回归；不触碰 AEC 分支
+- 结果：已补齐 upstream 1.4.2 `assets_bin/*.bin` 图标资源并强制纳入 git；修复 VeRTC 启动失败时
+  `onRunning()` 立即 `close()` 导致的退回首页；本地 `sdkconfig.local` 同步后重新生成 ignored 的
+  `sdkconfig` 并烧录，串口实测 `VeRTC.Agent` 可进入、`VOLC-Agent started`、唤醒/字幕/下行音频/视频帧持续运行；
+  AI.Agent/Xiaozhi 侧关闭高频角度自动同步并降低 pitch 堵转反馈频率，前一轮串口实测 AI.Agent 可唤醒并完成对话
+- 遗留：未完成“用户手动退出 VeRTC 后立即点 AI.Agent”的连续点击实测；VeRTC 长会话仍看到内部 SRAM
+  最低水位 1443B 与个别网络 `Not enough space` 日志，后续如仍有卡顿需单独排查内存/网络背压
+
 ## 2026-06-16 [codex] 基于 main 手动同步 StackChan 最新系统
 
 - 占用域：firmware-ui + docs-cloud
