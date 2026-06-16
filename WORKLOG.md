@@ -3,6 +3,18 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-16 [codex] 核对 VeRTC SDK BotID 配置
+
+- 占用域：firmware-audio + docs-cloud
+- 计划：确认 SDK `volc_start` 请求使用的 botID 是否为用户指定的本地 botID；
+  若本地构建配置仍指向旧 bot，则只修改 ignored 的本地配置并构建/烧录验证
+- 结果：确认 SDK 请求 `volc_start` 使用 `CONFIG_VOLC_BOT_ID`；本地 `firmware/sdkconfig.local`
+  与生成态 `firmware/sdkconfig` 原先仍为旧 bot，已同步为用户指定 botID。未改 tracked
+  `sdkconfig.defaults`，避免 botID/凭据进入 git；编译产物已确认只包含新 botID，不含旧 botID。
+  `idf.py build` 与 `idf.py -p /dev/cu.usbmodem2101 build flash` 均通过，设备已 hard reset
+- 遗留：未做 VeRTC 进房后的云端工具调用实测；如仍无工具执行，下一步看新 bot 的
+  FunctionCallingConfig 是否配置为客户端 RTS 投递
+
 ## 2026-06-16 [codex] 排查 VeRTC 回声与指示灯回归
 
 - 占用域：firmware-audio + firmware-ui + docs-cloud
