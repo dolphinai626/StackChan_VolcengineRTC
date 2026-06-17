@@ -129,16 +129,31 @@ void AfeWakeWord::Feed(const std::vector<int16_t>& data) {
         return;
     }
 
-    std::lock_guard<std::mutex> lock(input_buffer_mutex_);
-    // Check running state inside lock to avoid TOCTOU race with Stop()
-    if (!(xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT)) {
-        return;
-    }
-    input_buffer_.insert(input_buffer_.end(), data.begin(), data.end());
     size_t chunk_size = afe_iface_->get_feed_chunksize(afe_data_) * codec_->input_channels();
-    while (input_buffer_.size() >= chunk_size) {
-        afe_iface_->feed(afe_data_, input_buffer_.data());
-        input_buffer_.erase(input_buffer_.begin(), input_buffer_.begin() + chunk_size);
+    bool appended = false;
+    while (true) {
+        {
+            std::lock_guard<std::mutex> lock(input_buffer_mutex_);
+            // Check running state inside lock to avoid TOCTOU race with Stop()
+            if (!(xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT)) {
+                return;
+            }
+            if (!appended) {
+                input_buffer_.insert(input_buffer_.end(), data.begin(), data.end());
+                appended = true;
+            }
+            if (input_buffer_.size() < chunk_size) {
+                return;
+            }
+            feed_chunk_.assign(input_buffer_.begin(), input_buffer_.begin() + chunk_size);
+            input_buffer_.erase(input_buffer_.begin(), input_buffer_.begin() + chunk_size);
+        }
+
+        if (!(xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT)) {
+            return;
+        }
+        afe_iface_->feed(afe_data_, feed_chunk_.data());
+        vTaskDelay(1);
     }
 }
 

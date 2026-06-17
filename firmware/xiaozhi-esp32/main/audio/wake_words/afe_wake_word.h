@@ -45,6 +45,7 @@ private:
     AudioCodec* codec_ = nullptr;
     std::string last_detected_wake_word_;
     std::vector<int16_t> input_buffer_;
+    std::vector<int16_t> feed_chunk_;
     std::mutex input_buffer_mutex_;
 
     TaskHandle_t wake_word_encode_task_ = nullptr;

@@ -3,6 +3,27 @@
 > 每个 AI 会话开工时在此登记，收工时更新结果。格式：
 > `## YYYY-MM-DD [工具] 任务一句话` + 占用域 + 结果/遗留。
 
+## 2026-06-17 [codex] 合并 Xiaozhi 播放修复回 main
+
+- 占用域：firmware-audio + docs-cloud
+- 计划：用户确认 AI.Agent/Xiaozhi 播放修复验证通过；提交当前分支改动，合回 main，
+  在 main 上完成构建验证并删除临时分支，只保留 main
+- 结果：用户已确认 AI.Agent/Xiaozhi 播放修复验证通过；`codex/stackchan-latest-manual-upgrade`
+  已 fast-forward 合回 main；main 上 `idf.py build` 通过
+- 遗留：无
+
+## 2026-06-17 [codex] 排查 AI.Agent/Xiaozhi 无法播放
+
+- 占用域：firmware-audio + docs-cloud
+- 计划：RTC 链路已确认无问题；仅排查 AI.Agent/Xiaozhi 原生链路，先用串口确认是
+  下行未到达、Opus 解码失败、播放队列未写入，还是音频 codec/output 未打开
+- 结果：串口确认 Xiaozhi 云端下行正常，原始问题是 AFE wake-word feed 长时间占用输入链路，
+  触发 FEED ringbuffer full/WDT；已将 AFE feed 移出输入缓冲锁并在每个 feed chunk 后让出调度。
+  复测后仍反馈播放卡顿，进一步将 Xiaozhi speaking 阶段改为半双工，停止唤醒词检测以避免
+  AFE 与播放/解码抢 CPU 和 internal SRAM。已同步 `firmware/patches/xiaozhi-esp32.patch`，
+  `git diff --check`、patch reverse check、`idf.py build`、烧录均通过
+- 遗留：用户已实机验证通过
+
 ## 2026-06-16 [codex] 核对 VeRTC SDK BotID 配置
 
 - 占用域：firmware-audio + docs-cloud

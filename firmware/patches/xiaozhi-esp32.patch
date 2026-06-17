@@ -1,5 +1,5 @@
 diff --git a/main/application.cc b/main/application.cc
-index d69d43d..25a6edc 100644
+index d69d43d..9a365d3 100644
 --- a/main/application.cc
 +++ b/main/application.cc
 @@ -433,10 +433,8 @@ void Application::CheckNewVersion() {
@@ -79,6 +79,14 @@ index d69d43d..25a6edc 100644
  }
  
  void Application::Alert(const char* status, const char* message, const char* emotion, const std::string_view& sound) {
+@@ -916,6 +914,5 @@ void Application::HandleStateChangedEvent() {
+             if (listening_mode_ != kListeningModeRealtime) {
+                 audio_service_.EnableVoiceProcessing(false);
+-                // Only AFE wake word can be detected in speaking mode
+-                audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
++                audio_service_.EnableWakeWordDetection(false);
+             }
+             audio_service_.ResetDecoder();
 @@ -964,58 +965,6 @@ void Application::Reboot() {
      esp_restart();
  }
@@ -429,7 +437,7 @@ index 350ac58..89a9ba1 100644
          /* Encode the audio to send queue */
          if (!audio_encode_queue_.empty() && audio_send_queue_.size() < MAX_SEND_PACKETS_IN_QUEUE) {
 diff --git a/main/audio/wake_words/afe_wake_word.cc b/main/audio/wake_words/afe_wake_word.cc
-index 8fc5fef..36257bd 100644
+index 8fc5fef..d14da87 100644
 --- a/main/audio/wake_words/afe_wake_word.cc
 +++ b/main/audio/wake_words/afe_wake_word.cc
 @@ -79,12 +79,29 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
@@ -464,10 +472,53 @@ index 8fc5fef..36257bd 100644
  
      return true;
  }
+@@ -132,12 +149,27 @@ void AfeWakeWord::Feed(const std::vector<int16_t>& data) {
+-    std::lock_guard<std::mutex> lock(input_buffer_mutex_);
+-    // Check running state inside lock to avoid TOCTOU race with Stop()
+-    if (!(xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT)) {
+-        return;
+-    }
+-    input_buffer_.insert(input_buffer_.end(), data.begin(), data.end());
+     size_t chunk_size = afe_iface_->get_feed_chunksize(afe_data_) * codec_->input_channels();
+-    while (input_buffer_.size() >= chunk_size) {
+-        afe_iface_->feed(afe_data_, input_buffer_.data());
+-        input_buffer_.erase(input_buffer_.begin(), input_buffer_.begin() + chunk_size);
++    bool appended = false;
++    while (true) {
++        {
++            std::lock_guard<std::mutex> lock(input_buffer_mutex_);
++            // Check running state inside lock to avoid TOCTOU race with Stop()
++            if (!(xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT)) {
++                return;
++            }
++            if (!appended) {
++                input_buffer_.insert(input_buffer_.end(), data.begin(), data.end());
++                appended = true;
++            }
++            if (input_buffer_.size() < chunk_size) {
++                return;
++            }
++            feed_chunk_.assign(input_buffer_.begin(), input_buffer_.begin() + chunk_size);
++            input_buffer_.erase(input_buffer_.begin(), input_buffer_.begin() + chunk_size);
++        }
++
++        if (!(xEventGroupGetBits(event_group_) & DETECTION_RUNNING_EVENT)) {
++            return;
++        }
++        afe_iface_->feed(afe_data_, feed_chunk_.data());
++        vTaskDelay(1);
+     }
+ }
 diff --git a/main/audio/wake_words/afe_wake_word.h b/main/audio/wake_words/afe_wake_word.h
-index 6c2bf72..88024c0 100644
+index 6c2bf72..dff6538 100644
 --- a/main/audio/wake_words/afe_wake_word.h
 +++ b/main/audio/wake_words/afe_wake_word.h
+@@ -45,4 +45,5 @@ private:
+     AudioCodec* codec_ = nullptr;
+     std::string last_detected_wake_word_;
+     std::vector<int16_t> input_buffer_;
++    std::vector<int16_t> feed_chunk_;
+     std::mutex input_buffer_mutex_;
 @@ -50,6 +50,8 @@ private:
      TaskHandle_t wake_word_encode_task_ = nullptr;
      StaticTask_t* wake_word_encode_task_buffer_ = nullptr;
