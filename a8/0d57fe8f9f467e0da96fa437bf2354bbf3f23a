@@ -1,0 +1,310 @@
+firmware/main/Kconfig.projbuild
+  s_3a11d8100ff8d9::t_20e08c8122ee7c 48-62 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a39093cb9f73723c72a4703","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[48,62]}]}]}
+firmware/main/hal/hal_network.cpp
+  s_3a11d8100ff8d9::t_e39f010d528ef1 11 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a39098bb9f73723c72a470c","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Single":11}]}]}
+  s_3a11d8100ff8d9::t_e26b6522cd0208 62-76 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a39099fb9f73723c72a470f","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[62,76]}]}]}
+  s_3a11d8100ff8d9::t_7518f0a2a37f78 17 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a3909b3b9f73723c72a4715","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Single":17}]}]}
+firmware/sdkconfig.defaults
+  s_3a11d8100ff8d9::t_eef39fece542f8 139-142 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a390951b9f73723c72a4706","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[139,142]}]}]}
+WORKLOG.md
+  s_3a11d8100ff8d9::t_95e85518fb39bc 27-28,31 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a390c0db9f73723c72a4745","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[27,28]},{"Single":31}]}]}
+  s_3a11d8100ff8d9::t_ee5f461cc4aee8 22-26,29-30,32-33 gitai:{"mixed_line_ranges":[],"operations":[{"operation_id":"6a390bc1b9f73723c72a473c","tool_type":"agent","tool_id":"Edit","line_ranges":[{"Range":[22,26]},{"Range":[29,30]},{"Range":[32,33]}]}]}
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a80d57fe8f9f467e0da96fa437bf2354bbf3f23a",
+  "prompts": {},
+  "sessions": {
+    "s_3a11d8100ff8d9": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a38ede5a41e3e413b432225",
+        "model": "openrouter-3o__dev"
+      },
+      "human_author": "dolphinai626 <dolphinai626@users.noreply.github.com>"
+    }
+  },
+  "attestation_metadata": {
+    "WORKLOG.md": [
+      {
+        "hash": "s_3a11d8100ff8d9::t_95e85518fb39bc",
+        "line_ranges": [
+          {
+            "Range": [
+              27,
+              28
+            ]
+          },
+          {
+            "Single": 31
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a390c0db9f73723c72a4745",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  27,
+                  28
+                ]
+              },
+              {
+                "Single": 31
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_3a11d8100ff8d9::t_ee5f461cc4aee8",
+        "line_ranges": [
+          {
+            "Range": [
+              22,
+              26
+            ]
+          },
+          {
+            "Range": [
+              29,
+              30
+            ]
+          },
+          {
+            "Range": [
+              32,
+              33
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a390bc1b9f73723c72a473c",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  22,
+                  26
+                ]
+              },
+              {
+                "Range": [
+                  29,
+                  30
+                ]
+              },
+              {
+                "Range": [
+                  32,
+                  33
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/Kconfig.projbuild": [
+      {
+        "hash": "s_3a11d8100ff8d9::t_20e08c8122ee7c",
+        "line_ranges": [
+          {
+            "Range": [
+              48,
+              62
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a39093cb9f73723c72a4703",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  48,
+                  62
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/main/hal/hal_network.cpp": [
+      {
+        "hash": "s_3a11d8100ff8d9::t_e39f010d528ef1",
+        "line_ranges": [
+          {
+            "Single": 11
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a39098bb9f73723c72a470c",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Single": 11
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_3a11d8100ff8d9::t_e26b6522cd0208",
+        "line_ranges": [
+          {
+            "Range": [
+              62,
+              76
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a39099fb9f73723c72a470f",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  62,
+                  76
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "hash": "s_3a11d8100ff8d9::t_7518f0a2a37f78",
+        "line_ranges": [
+          {
+            "Single": 17
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a3909b3b9f73723c72a4715",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Single": 17
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "firmware/sdkconfig.defaults": [
+      {
+        "hash": "s_3a11d8100ff8d9::t_eef39fece542f8",
+        "line_ranges": [
+          {
+            "Range": [
+              139,
+              142
+            ]
+          }
+        ],
+        "mixed_line_ranges": [],
+        "operations": [
+          {
+            "operation_id": "6a390951b9f73723c72a4706",
+            "tool_type": "agent",
+            "tool_id": "Edit",
+            "line_ranges": [
+              {
+                "Range": [
+                  139,
+                  142
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remote_transcripts": {
+    "s_3a11d8100ff8d9": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_20e08c8122ee7c": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_7518f0a2a37f78": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_95e85518fb39bc": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_a5d9a190ddefe4": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_e26b6522cd0208": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_e39f010d528ef1": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_ee5f461cc4aee8": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    },
+    "s_3a11d8100ff8d9::t_eef39fece542f8": {
+      "tool": "trae",
+      "conversation_id": "6a38ede5a41e3e413b432225",
+      "session_id": "6a38ede5a41e3e413b432225",
+      "status": "remote_only",
+      "message": "Remote transcript resolution is not implemented yet for TRAE prompts."
+    }
+  }
+}
