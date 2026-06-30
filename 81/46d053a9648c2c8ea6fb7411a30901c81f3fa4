@@ -1,0 +1,30 @@
+docs/CLOUD_TOOLS_CONFIG.md
+  s_9d71a772f9ee6a::t_9d3266c8db51c4 216,225-227,230
+  s_9d71a772f9ee6a::t_b27edc1f26198c 158-201
+README.md
+  s_9d71a772f9ee6a::t_639b7352ad27f5 80-92
+  s_9d71a772f9ee6a::t_ea2e57ab038749 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8146d053a9648c2c8ea6fb7411a30901c81f3fa4",
+  "prompts": {},
+  "humans": {
+    "h_ca2846598703b8": {
+      "author": "dolphinai626 <dolphinai626@users.noreply.github.com>"
+    }
+  },
+  "sessions": {
+    "s_9d71a772f9ee6a": {
+      "agent_id": {
+        "tool": "trae",
+        "id": "6a2ac34ac718d02a7594b713",
+        "model": "openrouter-3o__dev"
+      },
+      "human_author": null
+    }
+  },
+  "attestation_metadata": {},
+  "remote_transcripts": {}
+}
