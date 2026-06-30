@@ -11,7 +11,7 @@
 
 - **双后端共存** — 同一固件，launcher 中选择 `VeRTC.Agent` 或 `AI.Agent`；任意时刻仅一个入口持有音频/摄像头资源。
 - **板级 HAL 复用** — 板级代码独立 component，可被 ESP32 任意 AI 项目引用。
-- **云端智能体编排** — `VeRTC.Agent` 暴露 9 个端侧工具（舵机 / 摇头 / LED / 提醒 / 音量），云端必须用客户端投递 RTS 消息调用工具。
+- **云端智能体编排** — `VeRTC.Agent` 暴露 9 个端侧工具（舵机 / 摇头 / LED / 提醒 / 音量），并启用 WebSearch 联网搜索、音乐播放等云端内置工具；控制台可自定义新增工具。云端必须用客户端投递 RTS 消息调用端侧工具。
 - **工具调用可观测** — volcRTC 与 Xiaozhi 链路都会显示 `[工具] xxx 调用中/执行中/完成` 字幕，便于现场排查。
 - **视觉链路** — 火山后端支持低频 MJPEG 视觉采集，经 RTC 发送给云端智能体。
 - **禁止设备整包 OTA** — `AI.Agent` / Xiaozhi 只检查并提示新版本；同步 StackChan 开源更新必须走代码层手动移植，避免覆盖 `VeRTC.Agent` 链路。
@@ -76,6 +76,19 @@ idf.py build flash monitor
 服务端下发 `tool` 消息，设备执行后用 `func` 回包。完整 JSON schema、System Prompt 模板与验证清单见 [docs/CLOUD_TOOLS_CONFIG.md](docs/CLOUD_TOOLS_CONFIG.md)。
 
 `AI.Agent` / Xiaozhi 链路通过 MCP 自动注册同名机器人能力；音量使用 Xiaozhi 内建 `self.get_device_status` / `self.audio_speaker.set_volume`。
+
+### 云端内置工具
+
+除端侧工具外，火山控制台智能体还启用了两个由云端执行的内置工具（端侧无需实现，不显示 `[工具]` 字幕）：
+
+| 内置工具 | 说明 |
+| --- | --- |
+| `WebSearch` | 联网搜索时效性信息（天气 / 新闻 / 股价 / 最新政策等）；模型能直接回答时不调用 |
+| `music_player`（MusicAgent） | 用户明确要求播放或控制音乐时触发；模糊的"暂停/停止"不触发 |
+
+### 在控制台自定义新增工具
+
+火山控制台智能体支持自定义新增工具：**端侧执行的工具**需在智能体 Tools 里按 JSON schema 新增、保证客户端投递，并在 `volc_agent.cpp` 的 `dispatchTool` 实现同名分支（端侧实现 / docs / README 三处同步）；**云端内置 / 托管工具**（如 WebSearch、MusicAgent）只需在控制台对应 Config 开关启用。详见 [docs/CLOUD_TOOLS_CONFIG.md](docs/CLOUD_TOOLS_CONFIG.md)。
 
 ## Troubleshooting
 

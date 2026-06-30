@@ -155,7 +155,50 @@
 ```
 返回：`{"ok":true,"volume":<int>}`
 
-## 3. System Prompt 模板（建议）
+## 3. 内置云端工具（控制台智能体勾选启用，无需端侧实现）
+
+除上面 9 个端侧工具外，火山智能体还在云端启用了两个**内置工具**。它们在控制台
+智能体 Config 里开关，由火山侧执行，端侧无需实现，也不走 RTS `tool`/`func` 回包，
+因此屏幕不会显示 `[工具] xxx` 调用字幕。
+
+### WebSearch（联网搜索）
+
+`WebSearchAgentConfig.Enable = true`，用于查询时效性信息。
+
+| 字段 | 值 |
+| --- | --- |
+| FunctionName | `WebSearch` |
+| FunctionDescription | 查询实时信息，如今天的天气、最新的新闻、A 股票的当前价格等 |
+| ComfortWords | 让我打开雷达搜索一下。 |
+| ParamsString | `{"bot_id":"<联网搜索 bot id>","stream":true}` |
+| APIKey | 由 `WEBSEARCH_API_KEY` 注入（不进 git） |
+
+System Prompt 约束：WebSearch 只用于天气、新闻、股价、日期、最新政策等时效性信息；
+模型能直接回答时不要调用，避免无谓搜索延迟。
+
+### 音乐播放（MusicAgent）
+
+`MusicAgentConfig.Enable = true`，触发函数 `music_player`，用户意图为播放/控制音乐时触发。
+
+System Prompt 约束：仅当用户明确要播放或控制音乐时才触发 `music_player`；用户只说
+"暂停 / 停止 / 停一下"等模糊指令且上一轮与音乐无关时，视为停止对话直接文字回应，
+不得调用 `music_player`。
+
+## 4. 在控制台智能体自定义新增工具
+
+火山控制台智能体支持在 Tools / Config 里**自定义新增工具**，分两类：
+
+- **端侧执行的工具**：按第 2 节 JSON schema 格式在智能体 Tools 里新增 function，并保证
+  `FunctionCallingConfig` 为客户端投递（RTS）。设备侧必须在 `volc_agent.cpp` 的
+  `dispatchTool` 里实现同名分支并回 `func` 包，否则 LLM 调用后会挂起等不到结果。
+  **新增端侧工具时，端侧 `dispatchTool`、本文档第 2 节、README 三处必须同步更新。**
+- **云端执行的内置 / 托管工具**（如 WebSearch、MusicAgent 或其他火山提供的 Agent 能力）：
+  在控制台对应 Config 开关启用即可，端侧无需改动。
+
+> 命名建议：端侧工具沿用 `self.robot.*`，云端内置工具沿用火山函数名，避免与现有工具
+> 重名导致分发歧义。
+
+## 5. System Prompt 模板（建议）
 
 ```
 你是名为 StackChan 的桌面机器人，回复会被语音合成朗读并显示为字幕：
@@ -170,7 +213,7 @@
 - set_volume/get_volume 按用户要求调音量
 ```
 
-## 4. 两链路能力对照
+## 6. 两链路能力对照
 
 | 能力 | volcRTC（云端 Tools 配置） | xiaozhi（MCP 自动注册） |
 | --- | --- | --- |
@@ -179,10 +222,12 @@
 | set_led_color | self.robot.set_led_color | self.robot.set_led_color（同名） |
 | reminder 三件套 | self.robot.* | self.robot.*（同名） |
 | 音量 | self.robot.get/set_volume | xiaozhi 内建 `self.get_device_status` / `self.audio_speaker.set_volume` |
-| 调用过程字幕 | `[工具] <名> 调用中/执行中/完成` | 同左 |
+| 联网搜索 | WebSearch（云端内置） | —（xiaozhi 链路无） |
+| 音乐播放 | music_player（云端内置 MusicAgent） | —（xiaozhi 链路无） |
+| 调用过程字幕 | `[工具] <名> 调用中/执行中/完成`（仅端侧工具） | 同左 |
 | 唤醒前声源定位 | AFE DOA，唤醒瞬间转头朝向声源 | —（xiaozhi 链路无 DOA） |
 
-## 5. 配置后验证清单
+## 7. 配置后验证清单
 
 1. 串口应出现：`function_calling triggered: ...`（info 消息，若服务端下发）
    → `tool call: self.robot.xxx args=...` → `tool result sent ret=0`
